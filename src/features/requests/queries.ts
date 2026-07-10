@@ -1,5 +1,6 @@
 import {
   and,
+  asc,
   count,
   desc,
   eq,
@@ -15,10 +16,18 @@ import type { AuthenticatedUser } from "@/auth/session-service";
 import {
   projectMemberships,
   projects,
+  requestEvents,
+  requestProgressStatuses,
+  requestRecordStatuses,
   requests,
   users,
 } from "@/db/schema";
-import type { AppDatabase } from "@/db/types";
+import type {
+  AppDatabase,
+  RequestEventType,
+  RequestProgressStatus,
+  RequestRecordStatus,
+} from "@/db/types";
 import {
   actionFailure,
   actionSuccess,
@@ -46,6 +55,19 @@ export type RequestListResult = {
   pageCount: number;
 };
 
+export type RequestHistoryChange = {
+  from: RequestProgressStatus | RequestRecordStatus;
+  to: RequestProgressStatus | RequestRecordStatus;
+};
+
+export type RequestHistoryEventDto = {
+  id: number;
+  eventType: RequestEventType;
+  actor: { id: number; displayName: string } | null;
+  change: RequestHistoryChange | null;
+  createdAt: Date;
+};
+
 const requestViewSelection = {
   ...getTableColumns(requests),
   projectCode: projects.code,
@@ -70,6 +92,40 @@ function invalidInput(error: ZodError): ActionFailure {
     "查询条件无效",
     validationErrors(error),
   );
+}
+
+function isStatus<T extends readonly string[]>(
+  values: T,
+  value: unknown,
+): value is T[number] {
+  return typeof value === "string" && values.includes(value);
+}
+
+function safeEventChange(
+  eventType: RequestEventType,
+  payload: Record<string, unknown> | null,
+): RequestHistoryChange | null {
+  if (!payload) return null;
+  if (
+    eventType === "PROGRESS_CHANGED" &&
+    isStatus(requestProgressStatuses, payload.from) &&
+    isStatus(requestProgressStatuses, payload.to)
+  ) {
+    return { from: payload.from, to: payload.to };
+  }
+  if (
+    [
+      "REQUEST_PAUSED",
+      "REQUEST_RESUMED",
+      "REQUEST_ARCHIVED",
+      "REQUEST_RESTORED",
+    ].includes(eventType) &&
+    isStatus(requestRecordStatuses, payload.from) &&
+    isStatus(requestRecordStatuses, payload.to)
+  ) {
+    return { from: payload.from, to: payload.to };
+  }
+  return null;
 }
 
 function getLiveActor(
@@ -187,6 +243,47 @@ export function getRequestDetail(
   return row
     ? actionSuccess(presentRequestView(row))
     : actionFailure("NOT_FOUND", "需求不存在");
+}
+
+export function listRequestEvents(
+  database: AppDatabase,
+  actor: AuthenticatedUser,
+  requestId: number,
+): ActionResult<RequestHistoryEventDto[]> {
+  const access = getRequestDetail(database, actor, requestId);
+  if (!access.ok) return access;
+
+  const visibility =
+    actor.role === "CUSTOMER"
+      ? eq(requestEvents.visibility, "PUBLIC")
+      : undefined;
+  const rows = database.db
+    .select({
+      id: requestEvents.id,
+      eventType: requestEvents.eventType,
+      payload: requestEvents.payload,
+      createdAt: requestEvents.createdAt,
+      actorId: users.id,
+      actorDisplayName: users.displayName,
+    })
+    .from(requestEvents)
+    .leftJoin(users, eq(users.id, requestEvents.actorId))
+    .where(and(eq(requestEvents.requestId, requestId), visibility))
+    .orderBy(asc(requestEvents.createdAt), asc(requestEvents.id))
+    .all();
+
+  return actionSuccess(
+    rows.map((row) => ({
+      id: row.id,
+      eventType: row.eventType,
+      actor:
+        row.actorId === null || row.actorDisplayName === null
+          ? null
+          : { id: row.actorId, displayName: row.actorDisplayName },
+      change: safeEventChange(row.eventType, row.payload),
+      createdAt: row.createdAt,
+    })),
+  );
 }
 
 export function listRequests(

@@ -14,7 +14,7 @@ import {
   listPublicRemarks,
 } from "@/features/communication/queries";
 import { RequestDetail } from "@/features/requests/components/request-detail";
-import { getRequestDetail } from "@/features/requests/queries";
+import { getRequestDetail, listRequestEvents } from "@/features/requests/queries";
 import { parseRequestNumber } from "@/lib/request-number";
 
 function routeRequestId(value: string): number | null {
@@ -48,7 +48,8 @@ export default async function RequestDetailPage({
   const attachments = listAuthorizedAttachments(database, actor, requestId);
   const remarks = listPublicRemarks(database, actor, requestId);
   const clarifications = listClarificationMessages(database, actor, requestId);
-  if (!attachments.ok || !remarks.ok || !clarifications.ok) notFound();
+  const events = listRequestEvents(database, actor, requestId);
+  if (!attachments.ok || !remarks.ok || !clarifications.ok || !events.ok) notFound();
 
   const privateNote =
     actor.role === "DEVELOPER"
@@ -76,6 +77,7 @@ export default async function RequestDetailPage({
         remarks={remarks.data}
         clarifications={clarifications.data}
         privateNote={privateNote?.ok ? privateNote.data : undefined}
+        events={events.data}
       />
     </div>
   );

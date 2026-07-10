@@ -3,7 +3,10 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
+  realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -31,7 +34,9 @@ describe("attachment crash reconciliation", () => {
   });
 
   async function fixture() {
-    const root = mkdtempSync(join(tmpdir(), "request-manager-ops-attachments-"));
+    const root = realpathSync(
+      mkdtempSync(join(tmpdir(), "request-manager-ops-attachments-")),
+    );
     cleanups.push(() => rmSync(root, { force: true, recursive: true }));
     const databasePath = join(root, "request-manager.db");
     const uploadsPath = join(root, "uploads");
@@ -170,5 +175,47 @@ describe("attachment crash reconciliation", () => {
         ),
       ),
     ).toBe(true);
+  });
+
+  it("refuses apply when the database is inside uploads and preserves SQLite files", async () => {
+    const root = realpathSync(
+      mkdtempSync(join(tmpdir(), "request-manager-ops-overlap-")),
+    );
+    cleanups.push(() => rmSync(root, { force: true, recursive: true }));
+    const uploadsPath = join(root, "uploads");
+    const databasePath = join(uploadsPath, "request-manager.db");
+    const database = createDatabase(databasePath);
+    migrateDatabase(database);
+    closeDatabase(database);
+    const walPath = `${databasePath}-wal`;
+    const shmPath = `${databasePath}-shm`;
+    const orphanPath = join(uploadsPath, "orphan.bin");
+    writeFileSync(walPath, "wal sentinel");
+    writeFileSync(shmPath, "shm sentinel");
+    writeFileSync(orphanPath, "orphan sentinel");
+
+    await expect(
+      checkAttachmentIntegrity({ databasePath, uploadsPath, apply: true }),
+    ).rejects.toThrow(/independent|overlap/i);
+
+    expect(readFileSync(databasePath).length).toBeGreaterThan(0);
+    expect(existsSync(walPath)).toBe(true);
+    expect(existsSync(shmPath)).toBe(true);
+    expect(existsSync(orphanPath)).toBe(true);
+  });
+
+  it("rejects uploads reached through an ancestor symbolic link", async () => {
+    const data = await fixture();
+    const alias = join(data.uploadsPath, "..", "uploads-alias");
+    symlinkSync(data.uploadsPath, alias, "dir");
+
+    await expect(
+      checkAttachmentIntegrity({
+        databasePath: data.databasePath,
+        uploadsPath: alias,
+        apply: true,
+      }),
+    ).rejects.toThrow(/symbolic/i);
+    expect(existsSync(data.orphanPath)).toBe(true);
   });
 });

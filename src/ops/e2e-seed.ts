@@ -39,24 +39,22 @@ export async function seedEndToEndData(options: SeedEndToEndOptions): Promise<vo
     options.liveUploadsPath,
     "live uploads directory",
   );
-  assertIndependentPaths(
-    databasePath,
-    "E2E database file",
-    liveDatabasePath,
-    "live database file",
-  );
-  assertIndependentPaths(
-    uploadsPath,
-    "E2E uploads directory",
-    liveUploadsPath,
-    "live uploads directory",
-  );
-  assertIndependentPaths(
-    databasePath,
-    "E2E database file",
-    uploadsPath,
-    "E2E uploads directory",
-  );
+  const managedPaths = [
+    [databasePath, "E2E database file"],
+    [uploadsPath, "E2E uploads directory"],
+    [liveDatabasePath, "live database file"],
+    [liveUploadsPath, "live uploads directory"],
+  ] as const;
+  for (let first = 0; first < managedPaths.length; first += 1) {
+    for (let second = first + 1; second < managedPaths.length; second += 1) {
+      assertIndependentPaths(
+        managedPaths[first]![0],
+        managedPaths[first]![1],
+        managedPaths[second]![0],
+        managedPaths[second]![1],
+      );
+    }
+  }
 
   if (existsSync(databasePath)) rmSync(databasePath, { force: true });
   rmSync(`${databasePath}-wal`, { force: true });

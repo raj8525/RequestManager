@@ -1,0 +1,83 @@
+import { spawnSync } from "node:child_process";
+import {
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { afterEach, describe, expect, it } from "vitest";
+
+import {
+  acquireDatabaseProcessLock,
+  databaseProcessLockPath,
+} from "@/ops/process-lock";
+
+const tsx = join(process.cwd(), "node_modules", ".bin", "tsx");
+
+describe("database process lock", () => {
+  const cleanups: Array<() => void> = [];
+
+  afterEach(() => {
+    cleanups.splice(0).forEach((cleanup) => cleanup());
+  });
+
+  function databasePath(): string {
+    const root = realpathSync(
+      mkdtempSync(join(tmpdir(), "request-manager-process-lock-")),
+    );
+    cleanups.push(() => rmSync(root, { force: true, recursive: true }));
+    return join(root, "request-manager.db");
+  }
+
+  it("prevents the application runtime from opening while restore owns the lock", () => {
+    const path = databasePath();
+    const restoreLock = acquireDatabaseProcessLock(path, "restore");
+    try {
+      const child = spawnSync(
+        tsx,
+        [
+          "-e",
+          'import { getRuntimeDatabase } from "./src/db/runtime.ts"; getRuntimeDatabase();',
+        ],
+        {
+          cwd: process.cwd(),
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            DATABASE_PATH: path,
+            UPLOADS_PATH: join(path, "..", "uploads"),
+            TEMP_UPLOADS_PATH: join(path, "..", "tmp"),
+          },
+        },
+      );
+      expect(child.status).not.toBe(0);
+      expect(child.stderr).toMatch(/lock|restore|running/i);
+    } finally {
+      restoreLock.release();
+    }
+  });
+
+  it("recovers a stale lock whose owning process is no longer alive", () => {
+    const path = databasePath();
+    const lockPath = databaseProcessLockPath(path);
+    writeFileSync(
+      lockPath,
+      `${JSON.stringify({
+        version: 1,
+        pid: 2_147_483_647,
+        owner: "application",
+        token: "stale-token",
+        createdAt: "2020-01-01T00:00:00.000Z",
+      })}\n`,
+    );
+    utimesSync(lockPath, new Date(0), new Date(0));
+
+    const lock = acquireDatabaseProcessLock(path, "restore");
+    expect(lock.owner).toBe("restore");
+    lock.release();
+  });
+});

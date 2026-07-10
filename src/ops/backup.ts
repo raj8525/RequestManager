@@ -6,7 +6,6 @@ import {
   lstatSync,
   mkdirSync,
   readdirSync,
-  renameSync,
   rmSync,
 } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
@@ -14,7 +13,11 @@ import { dirname, join, relative, sep } from "node:path";
 import Database from "better-sqlite3";
 
 import { closeDatabase, createDatabase } from "@/db/client";
-import { getSchemaVersion } from "@/db/migrate";
+import {
+  assertCurrentMigrationJournal,
+  getAppliedMigrationJournal,
+  type MigrationJournalEntry,
+} from "@/db/migrate";
 import type { AppDatabase } from "@/db/types";
 import {
   inspectRegularFile,
@@ -23,12 +26,20 @@ import {
   writeBackupManifest,
 } from "@/ops/manifest";
 import {
+  durableRenameManagedTree,
+  fsyncDirectory,
+  fsyncManagedTree,
+  fsyncRegularFile,
+  renameAndSyncParents,
+} from "@/ops/durability";
+import {
   assertIndependentPaths,
   assertSafeManagedFilePath,
   assertSafeManagedPath,
   attachmentRelativePath,
   liveAttachmentPath,
 } from "@/ops/paths";
+import { acquireDatabaseProcessLock } from "@/ops/process-lock";
 
 type SnapshotAttachment = {
   storageName: string;
@@ -76,10 +87,6 @@ function snapshotAttachments(sqlite: Database.Database): SnapshotAttachment[] {
     .all() as SnapshotAttachment[];
 }
 
-function sqliteSchemaVersion(sqlite: Database.Database): number {
-  return getSchemaVersion({ sqlite, db: {} } as AppDatabase);
-}
-
 function ensureCheckpoint(database: AppDatabase): void {
   const checkpoint = database.sqlite.pragma("wal_checkpoint(FULL)", {
     simple: false,
@@ -102,9 +109,11 @@ function assertManifestRowsMatchSnapshot(
   if (JSON.stringify(rows) !== JSON.stringify(expected)) {
     throw new Error("backup manifest does not match snapshot attachment rows");
   }
-  if (sqliteSchemaVersion(sqlite) !== manifest.schemaVersion) {
-    throw new Error("backup manifest schema version does not match its database");
+  const appliedJournal = getAppliedMigrationJournal(sqlite);
+  if (JSON.stringify(appliedJournal) !== JSON.stringify(manifest.migrationJournal)) {
+    throw new Error("backup manifest migration journal does not match its database");
   }
+  assertCurrentMigrationJournal(appliedJournal);
 }
 
 async function verifyManifestFile(
@@ -207,11 +216,12 @@ export async function createBackup(options: CreateBackupOptions): Promise<{
 
     const snapshot = new Database(snapshotPath, { fileMustExist: true });
     let rows: SnapshotAttachment[];
-    let schemaVersion: number;
+    let migrationJournal: MigrationJournalEntry[];
     try {
       snapshot.pragma("journal_mode = DELETE");
       rows = snapshotAttachments(snapshot);
-      schemaVersion = sqliteSchemaVersion(snapshot);
+      migrationJournal = getAppliedMigrationJournal(snapshot);
+      assertCurrentMigrationJournal(migrationJournal);
     } finally {
       snapshot.close();
     }
@@ -244,15 +254,16 @@ export async function createBackup(options: CreateBackupOptions): Promise<{
 
     const databaseFile = await inspectRegularFile(snapshotPath);
     const manifest: BackupManifest = {
-      formatVersion: 1,
+      formatVersion: 2,
       createdAt: (options.now ?? new Date()).toISOString(),
-      schemaVersion,
+      schemaVersion: migrationJournal.length,
+      migrationJournal,
       database: { path: "database.sqlite", ...databaseFile },
       attachments: manifestAttachments,
     };
     writeBackupManifest(partialPath, manifest);
     await verifyBackup(partialPath);
-    renameSync(partialPath, finalPath);
+    durableRenameManagedTree(partialPath, finalPath);
     return { backupPath: finalPath, manifest };
   } catch (error) {
     if (database) closeDatabase(database);
@@ -274,6 +285,7 @@ function assertStoppedDatabase(databasePath: string): void {
 function bestEffortRemove(path: string, recursive = false): void {
   try {
     rmSync(path, { force: true, recursive });
+    fsyncDirectory(dirname(path));
   } catch {
     // The completed swap remains valid; the recovery copy can be removed manually.
   }
@@ -305,100 +317,115 @@ export async function restoreBackup(options: RestoreBackupOptions): Promise<Back
   assertIndependentPaths(backupPath, "backup directory", uploadsPath, "uploads directory");
   assertIndependentPaths(backupPath, "backup directory", databasePath, "database file");
   assertIndependentPaths(databasePath, "database file", uploadsPath, "uploads directory");
-  assertStoppedDatabase(databasePath);
-  const manifest = await verifyBackup(backupPath);
-
-  mkdirManaged(dirname(databasePath));
-  mkdirManaged(dirname(uploadsPath));
-  const operationId = randomUUID();
-  const stagedDatabase = join(dirname(databasePath), `.restore-db-${operationId}`);
-  const stagedUploads = join(dirname(uploadsPath), `.restore-uploads-${operationId}`);
-  const previousDatabase = join(dirname(databasePath), `.previous-db-${operationId}`);
-  const previousUploads = join(dirname(uploadsPath), `.previous-uploads-${operationId}`);
-  let databaseMoved = false;
-  let uploadsMoved = false;
-  let databaseInstalled = false;
-  let uploadsInstalled = false;
-
+  const restoreLock = acquireDatabaseProcessLock(databasePath, "restore");
   try {
-    copyFileSync(
-      join(backupPath, manifest.database.path),
-      stagedDatabase,
-      constants.COPYFILE_EXCL,
-    );
-    mkdirSync(stagedUploads, { recursive: false, mode: 0o700 });
-    for (const attachment of manifest.attachments) {
-      const destination = liveAttachmentPath(
-        stagedUploads,
-        attachment.storageName,
-      );
-      mkdirManaged(dirname(destination));
+    assertStoppedDatabase(databasePath);
+    const manifest = await verifyBackup(backupPath);
+
+    mkdirManaged(dirname(databasePath));
+    mkdirManaged(dirname(uploadsPath));
+    const operationId = randomUUID();
+    const stagedDatabase = join(dirname(databasePath), `.restore-db-${operationId}`);
+    const stagedUploads = join(dirname(uploadsPath), `.restore-uploads-${operationId}`);
+    const previousDatabase = join(dirname(databasePath), `.previous-db-${operationId}`);
+    const previousUploads = join(dirname(uploadsPath), `.previous-uploads-${operationId}`);
+    let databaseMoved = false;
+    let uploadsMoved = false;
+    let databaseInstalled = false;
+    let uploadsInstalled = false;
+
+    try {
       copyFileSync(
-        join(backupPath, attachment.path),
-        destination,
+        join(backupPath, manifest.database.path),
+        stagedDatabase,
         constants.COPYFILE_EXCL,
       );
-      const copied = await inspectRegularFile(destination);
+      mkdirSync(stagedUploads, { recursive: false, mode: 0o700 });
+      for (const attachment of manifest.attachments) {
+        const destination = liveAttachmentPath(
+          stagedUploads,
+          attachment.storageName,
+        );
+        mkdirManaged(dirname(destination));
+        copyFileSync(
+          join(backupPath, attachment.path),
+          destination,
+          constants.COPYFILE_EXCL,
+        );
+        const copied = await inspectRegularFile(destination);
+        if (
+          copied.sizeBytes !== attachment.sizeBytes ||
+          copied.sha256 !== attachment.sha256
+        ) {
+          throw new Error(`staged attachment ${attachment.storageName} failed verification`);
+        }
+      }
+      const stagedDatabaseFile = await inspectRegularFile(stagedDatabase);
       if (
-        copied.sizeBytes !== attachment.sizeBytes ||
-        copied.sha256 !== attachment.sha256
+        stagedDatabaseFile.sizeBytes !== manifest.database.sizeBytes ||
+        stagedDatabaseFile.sha256 !== manifest.database.sha256
       ) {
-        throw new Error(`staged attachment ${attachment.storageName} failed verification`);
+        throw new Error("staged database failed SHA-256 verification");
+      }
+      fsyncRegularFile(stagedDatabase);
+      fsyncManagedTree(stagedUploads);
+
+      if (existsSync(databasePath)) {
+        renameAndSyncParents(databasePath, previousDatabase);
+        databaseMoved = true;
+      }
+      if (existsSync(uploadsPath)) {
+        assertDirectory(uploadsPath, "uploads directory");
+        renameAndSyncParents(uploadsPath, previousUploads);
+        uploadsMoved = true;
+      }
+      renameAndSyncParents(stagedDatabase, databasePath);
+      databaseInstalled = true;
+      renameAndSyncParents(stagedUploads, uploadsPath);
+      uploadsInstalled = true;
+    } catch (error) {
+      const rollbackErrors: unknown[] = [];
+      if (uploadsInstalled) {
+        attemptRollback(rollbackErrors, () => {
+          rmSync(uploadsPath, { force: true, recursive: true });
+          fsyncDirectory(dirname(uploadsPath));
+        });
+      }
+      if (uploadsMoved) {
+        attemptRollback(rollbackErrors, () =>
+          renameAndSyncParents(previousUploads, uploadsPath),
+        );
+      }
+      if (databaseInstalled) {
+        attemptRollback(rollbackErrors, () => {
+          rmSync(databasePath, { force: true });
+          fsyncDirectory(dirname(databasePath));
+        });
+      }
+      if (databaseMoved) {
+        attemptRollback(rollbackErrors, () =>
+          renameAndSyncParents(previousDatabase, databasePath),
+        );
+      }
+      if (rollbackErrors.length > 0) {
+        throw new AggregateError(
+          [error, ...rollbackErrors],
+          "restore failed and live-path rollback also failed",
+        );
+      }
+      throw error;
+    } finally {
+      rmSync(stagedDatabase, { force: true });
+      rmSync(stagedUploads, { force: true, recursive: true });
+      fsyncDirectory(dirname(stagedDatabase));
+      if (dirname(stagedUploads) !== dirname(stagedDatabase)) {
+        fsyncDirectory(dirname(stagedUploads));
       }
     }
-    const stagedDatabaseFile = await inspectRegularFile(stagedDatabase);
-    if (
-      stagedDatabaseFile.sizeBytes !== manifest.database.sizeBytes ||
-      stagedDatabaseFile.sha256 !== manifest.database.sha256
-    ) {
-      throw new Error("staged database failed SHA-256 verification");
-    }
-
-    if (existsSync(databasePath)) {
-      renameSync(databasePath, previousDatabase);
-      databaseMoved = true;
-    }
-    if (existsSync(uploadsPath)) {
-      assertDirectory(uploadsPath, "uploads directory");
-      renameSync(uploadsPath, previousUploads);
-      uploadsMoved = true;
-    }
-    renameSync(stagedDatabase, databasePath);
-    databaseInstalled = true;
-    renameSync(stagedUploads, uploadsPath);
-    uploadsInstalled = true;
-  } catch (error) {
-    const rollbackErrors: unknown[] = [];
-    if (uploadsInstalled) {
-      attemptRollback(rollbackErrors, () =>
-        rmSync(uploadsPath, { force: true, recursive: true }),
-      );
-    }
-    if (uploadsMoved) {
-      attemptRollback(rollbackErrors, () =>
-        renameSync(previousUploads, uploadsPath),
-      );
-    }
-    if (databaseInstalled) {
-      attemptRollback(rollbackErrors, () => rmSync(databasePath, { force: true }));
-    }
-    if (databaseMoved) {
-      attemptRollback(rollbackErrors, () =>
-        renameSync(previousDatabase, databasePath),
-      );
-    }
-    if (rollbackErrors.length > 0) {
-      throw new AggregateError(
-        [error, ...rollbackErrors],
-        "restore failed and live-path rollback also failed",
-      );
-    }
-    throw error;
+    if (databaseMoved) bestEffortRemove(previousDatabase);
+    if (uploadsMoved) bestEffortRemove(previousUploads, true);
+    return manifest;
   } finally {
-    rmSync(stagedDatabase, { force: true });
-    rmSync(stagedUploads, { force: true, recursive: true });
+    restoreLock.release();
   }
-  if (databaseMoved) bestEffortRemove(previousDatabase);
-  if (uploadsMoved) bestEffortRemove(previousUploads, true);
-  return manifest;
 }

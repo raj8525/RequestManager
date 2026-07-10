@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { requireCurrentUser } from "@/auth/current-user";
 import { getRuntimeDatabase } from "@/db/runtime";
+import { LogoutForm } from "@/features/accounts/components/logout-form";
 import { PasswordForm } from "@/features/accounts/components/password-form";
 
 export const metadata: Metadata = { title: "修改密码" };
@@ -20,6 +21,7 @@ export default async function PasswordPage() {
           用户名 @{actor.username} 不可自行修改。改密后所有登录会话会退出。
         </p>
         <PasswordForm />
+        <LogoutForm />
       </section>
     </main>
   );

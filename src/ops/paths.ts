@@ -1,9 +1,50 @@
-import { existsSync, lstatSync } from "node:fs";
+import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { dirname, parse, relative, resolve, sep } from "node:path";
+import {
+  basename,
+  dirname,
+  join,
+  parse,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
 
 const STORAGE_NAME_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+function canonicalProjection(path: string): string {
+  let existingPath = resolve(path);
+  const missingSegments: string[] = [];
+  while (!existsSync(existingPath)) {
+    const parent = dirname(existingPath);
+    if (parent === existingPath) break;
+    missingSegments.unshift(basename(existingPath));
+    existingPath = parent;
+  }
+  const canonicalBase = existsSync(existingPath)
+    ? realpathSync.native(existingPath)
+    : existingPath;
+  return resolve(canonicalBase, ...missingSegments);
+}
+
+function canonicalManagedPath(path: string, label: string): string {
+  const resolved = resolve(path);
+  const root = parse(resolved).root;
+  let current = root;
+  const relativeSegments = resolved
+    .slice(root.length)
+    .split(sep)
+    .filter(Boolean);
+  for (const segment of relativeSegments) {
+    current = join(current, segment);
+    if (!existsSync(current)) break;
+    if (lstatSync(current).isSymbolicLink()) {
+      throw new Error(`${label} must not contain symbolic-link path components`);
+    }
+  }
+  return canonicalProjection(resolved);
+}
 
 const PROTECTED_SYSTEM_TREES = [
   "/bin",
@@ -17,18 +58,18 @@ const PROTECTED_SYSTEM_TREES = [
   "/sbin",
   "/System",
   "/usr",
-].map((path) => resolve(path));
+].map(canonicalProjection);
 
 function dangerousDirectories(): Set<string> {
   return new Set([
-    resolve(parse(resolve("/")).root),
-    resolve(homedir()),
-    resolve(tmpdir()),
-    resolve(process.cwd()),
-    resolve("/private"),
-    resolve("/Users"),
-    resolve("/var"),
-    resolve("/Volumes"),
+    canonicalProjection(parse(resolve("/")).root),
+    canonicalProjection(homedir()),
+    canonicalProjection(tmpdir()),
+    canonicalProjection(process.cwd()),
+    canonicalProjection("/private"),
+    canonicalProjection("/Users"),
+    canonicalProjection("/var"),
+    canonicalProjection("/Volumes"),
   ]);
 }
 
@@ -42,16 +83,13 @@ function isWithinPath(parent: string, candidate: string): boolean {
 
 export function assertSafeManagedPath(path: string, label: string): string {
   if (!path.trim()) throw new Error(`${label} path is required`);
-  const resolved = resolve(path);
+  const resolved = canonicalManagedPath(path, label);
   if (
     parse(resolved).root === resolved ||
     dangerousDirectories().has(resolved) ||
     PROTECTED_SYSTEM_TREES.some((path) => isWithinPath(path, resolved))
   ) {
     throw new Error(`${label} points to a dangerous shared directory`);
-  }
-  if (existsSync(resolved) && lstatSync(resolved).isSymbolicLink()) {
-    throw new Error(`${label} must not be a symbolic link`);
   }
   return resolved;
 }
@@ -66,7 +104,10 @@ export function assertSafeManagedFilePath(path: string, label: string): string {
 }
 
 export function isPathInside(parent: string, candidate: string): boolean {
-  const pathFromParent = relative(resolve(parent), resolve(candidate));
+  const pathFromParent = relative(
+    canonicalProjection(parent),
+    canonicalProjection(candidate),
+  );
   return (
     pathFromParent !== "" &&
     pathFromParent !== ".." &&
@@ -80,8 +121,8 @@ export function assertIndependentPaths(
   second: string,
   secondLabel: string,
 ): void {
-  const resolvedFirst = resolve(first);
-  const resolvedSecond = resolve(second);
+  const resolvedFirst = canonicalManagedPath(first, firstLabel);
+  const resolvedSecond = canonicalManagedPath(second, secondLabel);
   if (
     resolvedFirst === resolvedSecond ||
     isPathInside(resolvedFirst, resolvedSecond) ||

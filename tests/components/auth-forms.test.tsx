@@ -5,11 +5,22 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LoginForm } from "@/features/accounts/components/login-form";
+import { LogoutForm } from "@/features/accounts/components/logout-form";
 import { PasswordForm } from "@/features/accounts/components/password-form";
 
 afterEach(cleanup);
 
 describe("account forms", () => {
+  it("offers a usable logout command on the forced-password screen", () => {
+    render(<LogoutForm />);
+
+    expect(screen.getByRole("form", { name: "退出登录" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "退出登录" })).toHaveAttribute(
+      "type",
+      "submit",
+    );
+  });
+
   it("keeps login intentionally role-free and reports the generic error", async () => {
     const action = vi.fn().mockResolvedValue({
       ok: false,

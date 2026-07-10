@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   readdirSync,
   rmSync,
   symlinkSync,
@@ -12,6 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { hashPassword } from "@/auth/password";
@@ -23,7 +25,11 @@ import {
   restoreBackup,
   verifyBackup,
 } from "@/ops/backup";
-import type { BackupManifest } from "@/ops/manifest";
+import { inspectRegularFile, type BackupManifest } from "@/ops/manifest";
+import {
+  acquireDatabaseProcessLock,
+  databaseProcessLockPath,
+} from "@/ops/process-lock";
 
 const NOW = new Date("2026-07-10T08:00:00.000Z");
 
@@ -39,7 +45,9 @@ describe("consistent backup and stopped restore", () => {
   });
 
   function isolatedPaths() {
-    const root = mkdtempSync(join(tmpdir(), "request-manager-ops-backup-"));
+    const root = realpathSync(
+      mkdtempSync(join(tmpdir(), "request-manager-ops-backup-")),
+    );
     cleanups.push(() => rmSync(root, { force: true, recursive: true }));
     return {
       root,
@@ -140,8 +148,13 @@ describe("consistent backup and stopped restore", () => {
     expect(result.backupPath.endsWith(".partial")).toBe(false);
     expect(existsSync(`${result.backupPath}.partial`)).toBe(false);
     expect(result.manifest).toMatchObject({
-      formatVersion: 1,
+      formatVersion: 2,
       schemaVersion: 3,
+      migrationJournal: [
+        { ordinal: 0, hash: expect.stringMatching(/^[0-9a-f]{64}$/) },
+        { ordinal: 1, hash: expect.stringMatching(/^[0-9a-f]{64}$/) },
+        { ordinal: 2, hash: expect.stringMatching(/^[0-9a-f]{64}$/) },
+      ],
       database: { path: "database.sqlite" },
       attachments: [
         {
@@ -318,5 +331,129 @@ describe("consistent backup and stopped restore", () => {
         now: NOW,
       }),
     ).rejects.toThrow(/symbolic|regular directory/i);
+  });
+
+  it("rejects a live database reached through an ancestor symbolic link", async () => {
+    const paths = isolatedPaths();
+    await seed(paths);
+    const liveAlias = join(paths.root, "live-alias");
+    symlinkSync(join(paths.root, "live"), liveAlias, "dir");
+
+    await expect(
+      createBackup({
+        databasePath: join(liveAlias, "request-manager.db"),
+        uploadsPath: paths.uploadsPath,
+        backupRoot: paths.backupRoot,
+        now: NOW,
+      }),
+    ).rejects.toThrow(/symbolic/i);
+  });
+
+  it("rejects restore targets reached through an ancestor symbolic link", async () => {
+    const paths = isolatedPaths();
+    await seed(paths);
+    const backup = await createBackup({
+      databasePath: paths.databasePath,
+      uploadsPath: paths.uploadsPath,
+      backupRoot: paths.backupRoot,
+      now: NOW,
+    });
+    const liveAlias = join(paths.root, "live-alias");
+    symlinkSync(join(paths.root, "live"), liveAlias, "dir");
+
+    await expect(
+      restoreBackup({
+        backupPath: backup.backupPath,
+        databasePath: paths.databasePath,
+        uploadsPath: join(liveAlias, "uploads"),
+        confirmed: true,
+        applicationStopped: true,
+      }),
+    ).rejects.toThrow(/symbolic/i);
+  });
+
+  it("rejects a same-length migration journal fork before touching live data", async () => {
+    const paths = isolatedPaths();
+    await seed(paths);
+    const backup = await createBackup({
+      databasePath: paths.databasePath,
+      uploadsPath: paths.uploadsPath,
+      backupRoot: paths.backupRoot,
+      now: NOW,
+    });
+    const snapshotPath = join(backup.backupPath, "database.sqlite");
+    const forkedHash = "a".repeat(64);
+    const snapshot = new Database(snapshotPath);
+    try {
+      snapshot
+        .prepare(
+          "update __drizzle_migrations set hash = ? where rowid = (select min(rowid) from __drizzle_migrations)",
+        )
+        .run(forkedHash);
+    } finally {
+      snapshot.close();
+    }
+    const manifestPath = join(backup.backupPath, "manifest.json");
+    const manifest = JSON.parse(
+      readFileSync(manifestPath, "utf8"),
+    ) as BackupManifest;
+    manifest.migrationJournal[0]!.hash = forkedHash;
+    manifest.database = {
+      path: "database.sqlite",
+      ...(await inspectRegularFile(snapshotPath)),
+    };
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+    const live = createDatabase(paths.databasePath);
+    live.db.update(requests).set({ content: "live migration branch" }).run();
+    closeDatabase(live);
+
+    await expect(
+      restoreBackup({
+        backupPath: backup.backupPath,
+        databasePath: paths.databasePath,
+        uploadsPath: paths.uploadsPath,
+        confirmed: true,
+        applicationStopped: true,
+      }),
+    ).rejects.toThrow(/migration.*(journal|compatible)/i);
+
+    const unchanged = createDatabase(paths.databasePath);
+    try {
+      expect(unchanged.db.select().from(requests).get()?.content).toBe(
+        "live migration branch",
+      );
+    } finally {
+      closeDatabase(unchanged);
+    }
+  });
+
+  it("holds the restore lock from preflight through replacement", async () => {
+    const paths = isolatedPaths();
+    await seed(paths);
+    const backup = await createBackup({
+      databasePath: paths.databasePath,
+      uploadsPath: paths.uploadsPath,
+      backupRoot: paths.backupRoot,
+      now: NOW,
+    });
+    const applicationLock = acquireDatabaseProcessLock(
+      paths.databasePath,
+      "application",
+    );
+    try {
+      await expect(
+        restoreBackup({
+          backupPath: backup.backupPath,
+          databasePath: paths.databasePath,
+          uploadsPath: paths.uploadsPath,
+          confirmed: true,
+          applicationStopped: true,
+        }),
+      ).rejects.toThrow(/lock|running/i);
+    } finally {
+      applicationLock.release();
+    }
+    expect(existsSync(databaseProcessLockPath(paths.databasePath))).toBe(false);
   });
 });

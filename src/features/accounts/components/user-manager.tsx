@@ -11,6 +11,7 @@ import {
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { ManagementDialog } from "@/components/management-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -201,14 +202,10 @@ export function UserManager({
       )}
 
       {editor ? (
-        <div className="management-dialog-backdrop">
-          <div
-            className="management-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="user-editor-title"
-          >
-            <h2 id="user-editor-title">{editorTitle(editor)}</h2>
+        <ManagementDialog
+          title={editorTitle(editor)}
+          onClose={() => setEditor(null)}
+        >
             {editor.kind === "create" ? (
               <UserForm onCancel={() => setEditor(null)} onSaved={saved} />
             ) : editor.kind === "edit" ? (
@@ -227,8 +224,7 @@ export function UserManager({
                 onSaved={saved}
               />
             )}
-          </div>
-        </div>
+        </ManagementDialog>
       ) : null}
 
       <ConfirmDialog

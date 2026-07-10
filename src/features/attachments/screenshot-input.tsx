@@ -153,7 +153,12 @@ export function ScreenshotInput({
             <li className="screenshot-preview" key={`${file.name}-${file.size}-${index}`}>
               {url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={url} alt="" className="screenshot-preview__image" />
+                <img
+                  src={url}
+                  alt=""
+                  className="screenshot-preview__image"
+                  style={{ objectFit: "contain" }}
+                />
               ) : (
                 <div className="screenshot-preview__placeholder" aria-hidden="true">
                   <ImagePlus size={18} />

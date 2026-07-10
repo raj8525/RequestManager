@@ -30,9 +30,14 @@ export function AttachmentGallery({
             target="_blank"
             rel="noreferrer"
             className="attachment-item__preview"
+            style={{ aspectRatio: "16 / 9" }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={attachment.url} alt={attachment.originalName} />
+            <img
+              src={attachment.url}
+              alt={attachment.originalName}
+              style={{ objectFit: "contain" }}
+            />
           </a>
           <div className="attachment-item__meta">
             <ImageIcon aria-hidden="true" size={15} />

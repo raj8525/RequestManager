@@ -45,6 +45,15 @@ describe("RequestDetail", () => {
           },
         ]}
         clarifications={[]}
+        events={[
+          {
+            id: 12,
+            eventType: "PROGRESS_CHANGED",
+            actor: { id: 8, displayName: "李开发" },
+            change: { from: "UNSCHEDULED", to: "SCHEDULED" },
+            createdAt: new Date("2026-07-10T08:30:00.000Z"),
+          },
+        ]}
       />,
     );
 
@@ -52,6 +61,8 @@ describe("RequestDetail", () => {
     expect(screen.getByRole("heading", { name: "确认与澄清" })).toBeVisible();
     expect(screen.queryByText("私人笔记")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "提交回复" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "操作历史" })).toBeVisible();
+    expect(screen.getByText("未排期改为已排期")).toBeVisible();
     expect(screen.getByText("<b>原样显示</b>，不要作为 HTML 执行。")).toBeVisible();
     expect(container.querySelector("b")).toBeNull();
   });
@@ -64,6 +75,7 @@ describe("RequestDetail", () => {
         attachments={[]}
         remarks={[]}
         clarifications={[]}
+        events={[]}
         privateNote={{
           id: 9,
           requestId: 7,

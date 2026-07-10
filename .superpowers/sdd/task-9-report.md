@@ -10,14 +10,15 @@ Baseline: `fc430ae`
   `ADMIN_*` values, creates only when no enabled developer exists, uses an
   immediate transaction, and never logs a password.
 - Added a versioned JSON backup manifest with SQLite and attachment sizes and
-  SHA-256 digests. Backup performs a WAL checkpoint, uses the
+  SHA-256 digests plus the ordered Drizzle migration journal. Backup performs a WAL checkpoint, uses the
   `better-sqlite3` online backup API, normalizes the snapshot away from WAL,
   copies only attachment rows present in that snapshot, verifies each source
   against its row, builds below `.partial`, verifies the complete file set,
   and atomically renames the completed backup.
 - Added stopped restore with both `--confirm-restore` and `--app-stopped`
   acknowledgements. Restore verifies the manifest, every digest, SQLite
-  integrity, foreign keys, schema version and exact attachment-row set before
+  integrity, foreign keys, the exact current-code migration hashes/order and
+  exact attachment-row set before
   staging beside live paths. It uses rename-based replacement with rollback;
   preflight or staging failure leaves live data unchanged.
 - Closed the Task 5 crash-reconciliation gate with an attachment checker that
@@ -104,3 +105,65 @@ rtk npm run lint
 rtk npm run build
 # compiled successfully; 11 static pages generated and all dynamic routes emitted
 ```
+
+## Security Hardening Follow-up
+
+Review of `7b676b5` found six destructive-operations gaps. The follow-up closes
+all six:
+
+- E2E seed now checks every pair among E2E database/uploads and live
+  database/uploads before any removal, including both previously missing
+  cross-pairs.
+- Managed paths canonicalize physical ancestors and reject every symbolic-link
+  component, so an ancestor alias cannot bypass overlap checks. Backup,
+  restore, E2E seed and attachment repair each have a regression test.
+- Attachment checking rejects database/uploads overlap before opening or
+  scanning either path. Its apply-mode regression proves the database,
+  WAL/SHM sentinels and orphan remain untouched.
+- Manifest format 2 records each applied migration ordinal, SHA-256 and journal
+  timestamp. Verification requires an exact match between manifest, snapshot
+  and the migrations shipped with the current application; a same-count fork
+  is rejected before touching live data.
+- The application runtime and restore now use the same atomic, PID-owned
+  process lock. Restore holds it across verification, staging, swap, rollback
+  and cleanup. Dead-owner locks are retired atomically; fresh incomplete and
+  live-owner locks fail closed.
+- Backup publication fsyncs every regular file and directory before rename and
+  fsyncs the parent afterward. Restore fsyncs staged data and every rename,
+  rollback and cleanup parent-directory boundary.
+
+Follow-up RED:
+
+```text
+rtk npm test -- tests/integration/ops tests/unit/ops
+# 5 files failed: 3 missing hardening modules and 3 behavioral regressions
+# overlap repair deleted database/WAL/SHM; both E2E cross-path cases mutated live paths
+```
+
+Follow-up GREEN:
+
+```text
+rtk npm test -- tests/integration/ops tests/unit/ops
+# 5 files passed, 24 tests passed
+
+rtk npx eslint src/db/migrate.ts src/db/runtime.ts src/ops/... tests/integration/ops tests/unit/ops
+# no issues found
+
+rtk npx tsc --noEmit -p <temporary Task 9-only tsconfig>
+# no errors found
+```
+
+The hardening rehearsal used
+`/private/tmp/request-manager-task9-security.BBHfnC`: migration and bootstrap
+succeeded, format-2 backup contained all three ordered migration hashes, a
+live runtime process blocked restore, and a same-count forked migration journal
+was rejected. After live database/attachment mutation, confirmed restore
+recovered `original security rehearsal` and `original protected screenshot`
+and removed the live-only file. Report-only attachment checking found one
+orphan without deletion, repair removed it, and the final check was clean.
+
+Full-project typecheck/build were intentionally deferred to the root task while
+the parallel Task 10 agent was adding not-yet-implemented component and event
+interfaces in the shared worktree. The focused Task 9 suite and scoped lint are
+clean; the root release gate will run the complete matrix after those parallel
+changes settle.

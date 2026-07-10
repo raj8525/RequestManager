@@ -4,6 +4,7 @@ import { Pencil, Plus, Power, PowerOff } from "lucide-react";
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { ManagementDialog } from "@/components/management-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -128,23 +129,16 @@ export function ProjectManager({ projects }: { projects: readonly Project[] }) {
       )}
 
       {editor ? (
-        <div className="management-dialog-backdrop">
-          <div
-            className="management-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="project-editor-title"
-          >
-            <h2 id="project-editor-title">
-              {editor.kind === "create" ? "新建项目" : `编辑 ${editor.project.code}`}
-            </h2>
+        <ManagementDialog
+          title={editor.kind === "create" ? "新建项目" : `编辑 ${editor.project.code}`}
+          onClose={() => setEditor(null)}
+        >
             <ProjectForm
               project={editor.kind === "edit" ? editor.project : undefined}
               onCancel={() => setEditor(null)}
               onSaved={saved}
             />
-          </div>
-        </div>
+        </ManagementDialog>
       ) : null}
 
       <ConfirmDialog

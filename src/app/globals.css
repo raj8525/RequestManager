@@ -334,6 +334,12 @@ summary:focus-visible {
   gap: 18px;
 }
 
+.auth-secondary-action {
+  border-top: 1px solid var(--border);
+  margin-top: 18px;
+  padding-top: 12px;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 226px minmax(0, 1fr);
@@ -1061,9 +1067,11 @@ summary:focus-visible {
 
 .screenshot-preview__image,
 .screenshot-preview__placeholder {
+  aspect-ratio: 1 / 1;
+  background: var(--surface-muted);
   border-radius: 3px;
   height: 42px;
-  object-fit: cover;
+  object-fit: contain;
   width: 42px;
 }
 
@@ -1221,15 +1229,23 @@ summary:focus-visible {
   border: 1px solid var(--border);
   border-radius: 5px;
   display: grid;
-  grid-template-rows: 140px auto;
+  grid-template-rows: auto auto;
   min-width: 0;
   position: relative;
   overflow: hidden;
 }
 
+.attachment-item__preview {
+  background: var(--surface-muted);
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .attachment-item__preview img {
-  height: 140px;
-  object-fit: cover;
+  display: block;
+  height: 100%;
+  object-fit: contain;
   width: 100%;
 }
 
@@ -1722,14 +1738,6 @@ summary:focus-visible {
 
   .attachment-gallery {
     grid-template-columns: 1fr;
-  }
-
-  .attachment-item {
-    grid-template-rows: 180px auto;
-  }
-
-  .attachment-item__preview img {
-    height: 180px;
   }
 
   .attention-banner {

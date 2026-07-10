@@ -5,6 +5,7 @@ import Database from "better-sqlite3";
 
 import { sha256File } from "@/ops/manifest";
 import {
+  assertIndependentPaths,
   assertSafeManagedFilePath,
   assertSafeManagedPath,
   liveAttachmentPath,
@@ -86,6 +87,12 @@ export async function checkAttachmentIntegrity(
     "database file",
   );
   const uploadsPath = assertSafeManagedPath(options.uploadsPath, "uploads directory");
+  assertIndependentPaths(
+    databasePath,
+    "database file",
+    uploadsPath,
+    "uploads directory",
+  );
   if (!existsSync(databasePath)) throw new Error("database file does not exist");
   const sqlite = new Database(databasePath, { readonly: true, fileMustExist: true });
   let rows: AttachmentRow[];

@@ -1,5 +1,14 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -7,6 +16,7 @@ import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { verifyPassword } from "@/auth/password";
+import { seedEndToEndData } from "@/ops/e2e-seed";
 import { assertSafeManagedPath } from "@/ops/paths";
 import { serializeStructuredLog } from "@/ops/structured-log";
 
@@ -46,7 +56,9 @@ describe("explicit migration and first-developer bootstrap", () => {
   });
 
   function isolatedPaths() {
-    const root = mkdtempSync(join(tmpdir(), "request-manager-ops-bootstrap-"));
+    const root = realpathSync(
+      mkdtempSync(join(tmpdir(), "request-manager-ops-bootstrap-")),
+    );
     cleanups.push(() => rmSync(root, { force: true, recursive: true }));
     return {
       root,
@@ -201,5 +213,64 @@ describe("explicit migration and first-developer bootstrap", () => {
     } finally {
       sqlite.close();
     }
+  });
+
+  it("rejects every E2E/live cross-path overlap before deleting seed data", async () => {
+    const paths = isolatedPaths();
+    const liveUploadsPath = join(paths.root, "live-uploads");
+    mkdirSync(liveUploadsPath, { recursive: true });
+    const liveDatabasePath = join(paths.root, "live-container", "live.db");
+    mkdirSync(join(paths.root, "live-container"), { recursive: true });
+    writeFileSync(liveDatabasePath, "live database sentinel");
+
+    await expect(
+      seedEndToEndData({
+        nodeEnvironment: "test",
+        databasePath: join(paths.root, "e2e.db"),
+        uploadsPath: join(paths.root, "live-container"),
+        liveDatabasePath,
+        liveUploadsPath,
+      }),
+    ).rejects.toThrow(/independent/i);
+    expect(readFileSync(liveDatabasePath, "utf8")).toBe(
+      "live database sentinel",
+    );
+
+    const e2eDatabaseInsideLiveUploads = join(liveUploadsPath, "e2e.db");
+    writeFileSync(e2eDatabaseInsideLiveUploads, "live uploads sentinel");
+    await expect(
+      seedEndToEndData({
+        nodeEnvironment: "test",
+        databasePath: e2eDatabaseInsideLiveUploads,
+        uploadsPath: join(paths.root, "e2e-uploads"),
+        liveDatabasePath,
+        liveUploadsPath,
+      }),
+    ).rejects.toThrow(/independent/i);
+    expect(readFileSync(e2eDatabaseInsideLiveUploads, "utf8")).toBe(
+      "live uploads sentinel",
+    );
+  });
+
+  it("rejects an E2E path reached through an ancestor symbolic link", async () => {
+    const paths = isolatedPaths();
+    const actualE2eRoot = join(paths.root, "actual-e2e");
+    const actualUploads = join(actualE2eRoot, "uploads");
+    mkdirSync(actualUploads, { recursive: true });
+    const sentinel = join(actualUploads, "keep.txt");
+    writeFileSync(sentinel, "keep");
+    const aliasRoot = join(paths.root, "e2e-alias");
+    symlinkSync(actualE2eRoot, aliasRoot, "dir");
+
+    await expect(
+      seedEndToEndData({
+        nodeEnvironment: "test",
+        databasePath: join(paths.root, "e2e.db"),
+        uploadsPath: join(aliasRoot, "uploads"),
+        liveDatabasePath: paths.databasePath,
+        liveUploadsPath: paths.uploadsPath,
+      }),
+    ).rejects.toThrow(/symbolic/i);
+    expect(existsSync(sentinel)).toBe(true);
   });
 });

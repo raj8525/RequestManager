@@ -13,7 +13,9 @@ import type {
   PublicRemarkDto,
 } from "@/features/communication/queries";
 import { RequestActions } from "@/features/requests/components/request-actions";
+import { RequestHistory } from "@/features/requests/components/request-history";
 import type { RequestViewDto } from "@/features/requests/presenter";
+import type { RequestHistoryEventDto } from "@/features/requests/queries";
 
 const typeLabels = {
   BUG: "Bug",
@@ -53,6 +55,7 @@ export function RequestDetail({
   remarks,
   clarifications,
   privateNote,
+  events,
 }: {
   actor: { id: number; role: UserRole };
   request: RequestViewDto;
@@ -60,6 +63,7 @@ export function RequestDetail({
   remarks: readonly PublicRemarkDto[];
   clarifications: readonly ClarificationMessageDto[];
   privateNote?: PrivateNoteDto | null;
+  events: readonly RequestHistoryEventDto[];
 }) {
   return (
     <div className="request-detail">
@@ -151,6 +155,7 @@ export function RequestDetail({
           note={privateNote}
         />
       ) : null}
+      <RequestHistory events={events} />
     </div>
   );
 }

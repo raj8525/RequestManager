@@ -141,11 +141,42 @@ describe("ScreenshotInput", () => {
   it("shows selected files and removes one with an accessible control", () => {
     const file = new File(["image"], "problem.png", { type: "image/png" });
     const onChange = vi.fn();
-    render(<ScreenshotInput value={[file]} onChange={onChange} />);
+    const createDescriptor = Object.getOwnPropertyDescriptor(URL, "createObjectURL");
+    const revokeDescriptor = Object.getOwnPropertyDescriptor(URL, "revokeObjectURL");
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: vi.fn(() => "blob:problem-preview"),
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: vi.fn(),
+    });
+    try {
+      const { container, unmount } = render(
+        <ScreenshotInput value={[file]} onChange={onChange} />,
+      );
 
-    const preview = screen.getByRole("listitem");
-    expect(within(preview).getByText("problem.png")).toBeVisible();
-    fireEvent.click(within(preview).getByRole("button", { name: "移除 problem.png" }));
-    expect(onChange).toHaveBeenCalledWith([]);
+      const preview = screen.getByRole("listitem");
+      expect(within(preview).getByText("problem.png")).toBeVisible();
+      const image = container.querySelector(".screenshot-preview__image");
+      expect(image).not.toBeNull();
+      expect(image).toHaveStyle({ objectFit: "contain" });
+      fireEvent.click(
+        within(preview).getByRole("button", { name: "移除 problem.png" }),
+      );
+      expect(onChange).toHaveBeenCalledWith([]);
+      unmount();
+    } finally {
+      if (createDescriptor) {
+        Object.defineProperty(URL, "createObjectURL", createDescriptor);
+      } else {
+        Reflect.deleteProperty(URL, "createObjectURL");
+      }
+      if (revokeDescriptor) {
+        Object.defineProperty(URL, "revokeObjectURL", revokeDescriptor);
+      } else {
+        Reflect.deleteProperty(URL, "revokeObjectURL");
+      }
+    }
   });
 });

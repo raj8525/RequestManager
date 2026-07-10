@@ -21,9 +21,18 @@ const backupFileSchema = z
 
 export const backupManifestSchema = z
   .object({
-    formatVersion: z.literal(1),
+    formatVersion: z.literal(2),
     createdAt: z.iso.datetime({ offset: true }),
     schemaVersion: z.number().int().nonnegative(),
+    migrationJournal: z.array(
+      z
+        .object({
+          ordinal: z.number().int().nonnegative(),
+          hash: sha256Schema,
+          createdAt: z.number().int().nonnegative(),
+        })
+        .strict(),
+    ),
     database: backupFileSchema.extend({ path: z.literal("database.sqlite") }),
     attachments: z.array(
       backupFileSchema
@@ -41,6 +50,22 @@ export const backupManifestSchema = z
   })
   .strict()
   .superRefine((manifest, context) => {
+    if (manifest.schemaVersion !== manifest.migrationJournal.length) {
+      context.addIssue({
+        code: "custom",
+        message: "schema version must match the migration journal length",
+        path: ["schemaVersion"],
+      });
+    }
+    for (const [index, migration] of manifest.migrationJournal.entries()) {
+      if (migration.ordinal !== index) {
+        context.addIssue({
+          code: "custom",
+          message: "migration journal ordinals must be contiguous and ordered",
+          path: ["migrationJournal", index, "ordinal"],
+        });
+      }
+    }
     const names = new Set<string>();
     for (const [index, attachment] of manifest.attachments.entries()) {
       if (names.has(attachment.storageName)) {
