@@ -13,3 +13,16 @@ const migrationsFolder = resolve(
 export function migrateDatabase(database: AppDatabase): void {
   migrate(database.db, { migrationsFolder });
 }
+
+export function getSchemaVersion(database: AppDatabase): number {
+  const table = database.sqlite
+    .prepare(
+      "select 1 as present from sqlite_master where type = 'table' and name = '__drizzle_migrations'",
+    )
+    .get() as { present: number } | undefined;
+  if (!table) return 0;
+  const row = database.sqlite
+    .prepare("select count(*) as version from __drizzle_migrations")
+    .get() as { version: number };
+  return row.version;
+}

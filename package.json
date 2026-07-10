@@ -9,7 +9,14 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "db:generate": "drizzle-kit generate --name=initial"
+    "db:generate": "drizzle-kit generate --name=initial",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "admin:init": "tsx scripts/init-developer.ts",
+    "ops:backup": "tsx scripts/backup.ts",
+    "ops:restore": "tsx scripts/restore.ts",
+    "ops:attachments:check": "tsx scripts/check-attachments.ts",
+    "ops:attachments:repair": "tsx scripts/check-attachments.ts --apply",
+    "e2e:seed": "tsx scripts/e2e-seed.ts"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",

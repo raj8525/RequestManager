@@ -38,6 +38,9 @@ yarn-error.log*
 
 # local application data
 /data/
+*.db-wal
+*.db-shm
+*.partial/
 
 # vercel
 .vercel
