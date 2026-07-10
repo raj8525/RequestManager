@@ -1,0 +1,279 @@
+import { eq, inArray } from "drizzle-orm";
+import { afterEach, describe, expect, it } from "vitest";
+
+import { canAccessProject } from "@/auth/authorization";
+import { hashPassword, verifyPassword } from "@/auth/password";
+import { createSession, getSessionUser } from "@/auth/session-service";
+import { projectMemberships, projects, sessions, users } from "@/db/schema";
+import {
+  createUser,
+  replaceCustomerMemberships,
+  resetUserPassword,
+  setUserActive,
+  updateUserIdentity,
+} from "@/features/accounts/service";
+import { listManageableUsers } from "@/features/accounts/queries";
+import { createTestDatabase, type TestDatabase } from "@/../tests/helpers/test-database";
+
+const NOW = new Date("2026-07-10T00:00:00.000Z");
+
+async function insertUser(
+  database: TestDatabase,
+  input: {
+    username: string;
+    role: "CUSTOMER" | "DEVELOPER";
+    isActive?: boolean;
+  },
+) {
+  return database.db
+    .insert(users)
+    .values({
+      username: input.username,
+      displayName: input.username,
+      passwordHash: await hashPassword("initial password"),
+      role: input.role,
+      isActive: input.isActive ?? true,
+      mustChangePassword: false,
+      createdAt: NOW,
+      updatedAt: NOW,
+    })
+    .returning()
+    .get();
+}
+
+function actorFor(user: Awaited<ReturnType<typeof insertUser>>) {
+  return {
+    id: user.id,
+    username: user.username,
+    displayName: user.displayName,
+    role: user.role,
+    mustChangePassword: false,
+  };
+}
+
+describe("developer-managed accounts", () => {
+  const cleanups: Array<() => void> = [];
+
+  afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()));
+
+  function database() {
+    const database = createTestDatabase();
+    cleanups.push(database.cleanup);
+    return database;
+  }
+
+  it("allows only developers to create accounts and normalizes usernames", async () => {
+    const db = database();
+    const developer = await insertUser(db, { username: "dev", role: "DEVELOPER" });
+    const customer = await insertUser(db, { username: "customer", role: "CUSTOMER" });
+
+    const forbidden = await createUser(db, actorFor(customer), {
+      username: "blocked",
+      displayName: "Blocked",
+      password: "temporary password",
+      role: "CUSTOMER",
+    });
+    expect(forbidden).toMatchObject({ ok: false, code: "FORBIDDEN" });
+
+    const created = await createUser(db, actorFor(developer), {
+      username: "  Alice.Admin  ",
+      displayName: "Alice 管理员",
+      password: "temporary password",
+      role: "DEVELOPER",
+    });
+    expect(created).toMatchObject({
+      ok: true,
+      data: {
+        username: "alice.admin",
+        displayName: "Alice 管理员",
+        role: "DEVELOPER",
+        isActive: true,
+        mustChangePassword: true,
+      },
+    });
+    expect(created.ok && "passwordHash" in created.data).toBe(false);
+    expect(
+      await verifyPassword(
+        "temporary password",
+        db.db.select().from(users).where(eq(users.username, "alice.admin")).get()!
+          .passwordHash,
+      ),
+    ).toBe(true);
+  });
+
+  it("validates usernames and enforces case-insensitive uniqueness on create and update", async () => {
+    const db = database();
+    const developer = await insertUser(db, { username: "dev", role: "DEVELOPER" });
+    const first = await insertUser(db, { username: "alice", role: "CUSTOMER" });
+    const second = await insertUser(db, { username: "bob", role: "CUSTOMER" });
+
+    const invalid = await createUser(db, actorFor(developer), {
+      username: "bad name",
+      displayName: "Bad",
+      password: "temporary password",
+      role: "CUSTOMER",
+    });
+    expect(invalid).toMatchObject({ ok: false, code: "INVALID_INPUT" });
+
+    const duplicate = await createUser(db, actorFor(developer), {
+      username: " ALICE ",
+      displayName: "Other Alice",
+      password: "temporary password",
+      role: "CUSTOMER",
+    });
+    expect(duplicate).toMatchObject({ ok: false, code: "CONFLICT" });
+
+    const updateDuplicate = await updateUserIdentity(db, actorFor(developer), {
+      userId: second.id,
+      username: "Alice",
+      displayName: "Bob",
+    });
+    expect(updateDuplicate).toMatchObject({ ok: false, code: "CONFLICT" });
+
+    const updated = await updateUserIdentity(db, actorFor(developer), {
+      userId: first.id,
+      username: " Alice.New ",
+      displayName: "Alice New",
+    });
+    expect(updated).toMatchObject({
+      ok: true,
+      data: { id: first.id, username: "alice.new", role: "CUSTOMER" },
+    });
+  });
+
+  it("resets a password with a fresh hash, forces password change and revokes all sessions", async () => {
+    const db = database();
+    const developer = await insertUser(db, { username: "dev", role: "DEVELOPER" });
+    const customer = await insertUser(db, { username: "alice", role: "CUSTOMER" });
+    const firstSession = createSession(db, customer.id, NOW);
+    const secondSession = createSession(db, customer.id, NOW);
+    const oldHash = customer.passwordHash;
+
+    const result = await resetUserPassword(db, actorFor(developer), {
+      userId: customer.id,
+      password: "replacement password",
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: { id: customer.id, mustChangePassword: true },
+    });
+    const stored = db.db.select().from(users).where(eq(users.id, customer.id)).get()!;
+    expect(stored.passwordHash).not.toBe(oldHash);
+    expect(await verifyPassword("replacement password", stored.passwordHash)).toBe(true);
+    expect(getSessionUser(db, firstSession.token, NOW)).toBeNull();
+    expect(getSessionUser(db, secondSession.token, NOW)).toBeNull();
+  });
+
+  it("prevents a developer from disabling self or the last active developer", async () => {
+    const db = database();
+    const developer = await insertUser(db, { username: "dev", role: "DEVELOPER" });
+
+    await expect(
+      setUserActive(db, actorFor(developer), {
+        userId: developer.id,
+        active: false,
+      }),
+    ).resolves.toMatchObject({ ok: false, code: "LAST_DEVELOPER" });
+    expect(db.db.select().from(users).where(eq(users.id, developer.id)).get()?.isActive).toBe(
+      true,
+    );
+  });
+
+  it("disables other accounts, revokes their sessions and never exposes password hashes", async () => {
+    const db = database();
+    const developer = await insertUser(db, { username: "dev", role: "DEVELOPER" });
+    const customer = await insertUser(db, { username: "alice", role: "CUSTOMER" });
+    createSession(db, customer.id, NOW);
+
+    const disabled = await setUserActive(db, actorFor(developer), {
+      userId: customer.id,
+      active: false,
+    });
+    expect(disabled).toMatchObject({ ok: true, data: { id: customer.id, isActive: false } });
+    expect(db.db.select().from(sessions).where(eq(sessions.userId, customer.id)).all()).toEqual(
+      [],
+    );
+
+    const listed = listManageableUsers(db, actorFor(developer));
+    expect(listed.ok).toBe(true);
+    if (listed.ok) {
+      expect(listed.data).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: customer.id, username: "alice", isActive: false }),
+        ]),
+      );
+      expect(listed.data.some((user) => "passwordHash" in user)).toBe(false);
+    }
+  });
+
+  it("replaces customer memberships atomically and revokes project access immediately", async () => {
+    const db = database();
+    const developer = await insertUser(db, { username: "dev", role: "DEVELOPER" });
+    const customer = await insertUser(db, { username: "alice", role: "CUSTOMER" });
+    const [firstProject, secondProject] = db.db
+      .insert(projects)
+      .values([
+        { code: "ONE", name: "One", createdAt: NOW, updatedAt: NOW },
+        { code: "TWO", name: "Two", isActive: false, createdAt: NOW, updatedAt: NOW },
+      ])
+      .returning()
+      .all();
+    db.db
+      .insert(projectMemberships)
+      .values({ customerId: customer.id, projectId: firstProject.id })
+      .run();
+
+    const replaced = await replaceCustomerMemberships(db, actorFor(developer), {
+      customerId: customer.id,
+      projectIds: [secondProject.id],
+    });
+
+    expect(replaced).toMatchObject({
+      ok: true,
+      data: { customerId: customer.id, projectIds: [secondProject.id] },
+    });
+    expect(canAccessProject(db, actorFor(customer), firstProject.id)).toBe(false);
+    expect(canAccessProject(db, actorFor(customer), secondProject.id)).toBe(true);
+  });
+
+  it("rejects inactive or non-customer membership targets and missing projects without partial writes", async () => {
+    const db = database();
+    const developer = await insertUser(db, { username: "dev", role: "DEVELOPER" });
+    const inactiveCustomer = await insertUser(db, {
+      username: "inactive",
+      role: "CUSTOMER",
+      isActive: false,
+    });
+    const otherDeveloper = await insertUser(db, {
+      username: "other-dev",
+      role: "DEVELOPER",
+    });
+    const project = db.db
+      .insert(projects)
+      .values({ code: "ONE", name: "One", createdAt: NOW, updatedAt: NOW })
+      .returning()
+      .get();
+
+    for (const customerId of [inactiveCustomer.id, otherDeveloper.id]) {
+      const result = await replaceCustomerMemberships(db, actorFor(developer), {
+        customerId,
+        projectIds: [project.id],
+      });
+      expect(result).toMatchObject({ ok: false, code: "INVALID_INPUT" });
+    }
+
+    const missing = await replaceCustomerMemberships(db, actorFor(developer), {
+      customerId: inactiveCustomer.id,
+      projectIds: [project.id, 999_999],
+    });
+    expect(missing.ok).toBe(false);
+    expect(
+      db.db
+        .select()
+        .from(projectMemberships)
+        .where(inArray(projectMemberships.customerId, [inactiveCustomer.id, otherDeveloper.id]))
+        .all(),
+    ).toEqual([]);
+  });
+});
