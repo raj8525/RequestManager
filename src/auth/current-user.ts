@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 import { getSessionUser, type AuthenticatedUser } from "@/auth/session-service";
 import type { AppDatabase } from "@/db/types";
@@ -58,4 +59,12 @@ export async function getCurrentUser(
   const resolvedCookies = cookieStore ?? (await cookies());
   const token = resolvedCookies.get(SESSION_COOKIE_NAME)?.value;
   return token ? getSessionUser(database, token, now) : null;
+}
+
+export async function requireCurrentUser(
+  database: AppDatabase,
+): Promise<AuthenticatedUser> {
+  const actor = await getCurrentUser(database);
+  if (!actor) redirect("/login");
+  return actor;
 }
