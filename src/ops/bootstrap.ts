@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { passwordSchema } from "@/auth/credential-policy";
 import { hashPassword } from "@/auth/password";
 import { closeDatabase, createDatabase } from "@/db/client";
 import { users } from "@/db/schema";
@@ -11,7 +12,7 @@ const firstDeveloperSchema = z
   .object({
     username: usernameSchema,
     displayName: z.string().trim().min(1).max(128),
-    password: z.string().min(10).max(128),
+    password: passwordSchema,
   })
   .strict();
 

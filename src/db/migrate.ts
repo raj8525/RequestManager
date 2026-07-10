@@ -1,5 +1,4 @@
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { readMigrationFiles } from "drizzle-orm/migrator";
@@ -8,10 +7,7 @@ import type Database from "better-sqlite3";
 
 import type { AppDatabase } from "@/db/types";
 
-const migrationsFolder = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  "../../drizzle",
-);
+const migrationsFolder = resolve(process.cwd(), "drizzle");
 
 export function migrateDatabase(database: AppDatabase): void {
   migrate(database.db, { migrationsFolder });

@@ -39,9 +39,7 @@ export async function addPublicRemarkRuntimeAction(input: AddPublicRemarkInput) 
 export async function savePrivateNoteRuntimeAction(input: SaveOwnPrivateNoteInput) {
   const { database, actor } = await actorAndDatabase();
   if (!actor) return actionFailure("UNAUTHENTICATED", "登录已过期，请重新登录");
-  const result = await saveOwnPrivateNote(database, actor, input);
-  if (result.ok) revalidatePath(`/requests/${input.requestId}`);
-  return result;
+  return saveOwnPrivateNote(database, actor, input);
 }
 
 export async function askClarificationRuntimeAction(input: ClarificationMessageInput) {

@@ -20,7 +20,7 @@ export default async function PasswordPage() {
         <p className="auth-panel__description">
           用户名 @{actor.username} 不可自行修改。改密后所有登录会话会退出。
         </p>
-        <PasswordForm />
+        <PasswordForm username={actor.username} />
         <LogoutForm />
       </section>
     </main>

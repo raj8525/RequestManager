@@ -71,7 +71,6 @@ export function ClarificationThread({
       }
       setContent("");
       key.current = idempotencyKey();
-      window.location.reload();
     } catch {
       setError("消息提交失败，请稍后重试");
     } finally {

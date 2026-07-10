@@ -1,6 +1,6 @@
 # RequestManager Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Build and release the approved two-role RequestManager as a complete local Next.js application backed by SQLite and protected local screenshot storage.
 
@@ -28,7 +28,7 @@
 src/
   app/
     (auth)/login/
-    (app)/account/password/
+    (password)/account/password/
     (app)/manage/projects/
     (app)/manage/users/
     (app)/requests/new/
@@ -70,7 +70,7 @@ data/                   ignored runtime database, uploads, temp and backups
 - Produces: `closeDatabase(db: AppDatabase): void`
 - Produces: all Drizzle table objects exported from `@/db/schema`
 
-- [ ] **Step 1: Scaffold the generated Next.js shell and install locked dependencies**
+- [x] **Step 1: Scaffold the generated Next.js shell and install locked dependencies**
 
 Run:
 
@@ -84,7 +84,7 @@ npm install -D drizzle-kit@0.31.10 tsx@4.23.0 vitest@4.1.10 @playwright/test@1.6
 
 Expected: dependency installation succeeds and the generated app starts without modifying the approved specification.
 
-- [ ] **Step 2: Write the failing database configuration test**
+- [x] **Step 2: Write the failing database configuration test**
 
 ```ts
 import { afterEach, describe, expect, it } from "vitest";
@@ -104,13 +104,13 @@ describe("createDatabase", () => {
 });
 ```
 
-- [ ] **Step 3: Run RED**
+- [x] **Step 3: Run RED**
 
 Run: `npm test -- tests/unit/db/client.test.ts`
 
 Expected: FAIL because `createTestDatabase` and `createDatabase` do not exist.
 
-- [ ] **Step 4: Implement the typed connection, complete schema and migration**
+- [x] **Step 4: Implement the typed connection, complete schema and migration**
 
 Define enums as literal tuples, declare the `users`, `sessions`, `authThrottle`, `projects`, `projectMemberships`, `requests`, `attachments`, `publicRemarks`, `privateNotes`, `clarificationMessages` and `requestEvents` tables, including foreign keys, unique idempotency constraints, timestamps and request `version`. `createDatabase` must execute:
 
@@ -123,7 +123,7 @@ return { sqlite, db: drizzle(sqlite, { schema }) };
 
 Generate and commit explicit SQL with `npm run db:generate`; tests call `migrateDatabase` against a temporary file rather than using `push`.
 
-- [ ] **Step 5: Run GREEN and the generated-app checks**
+- [x] **Step 5: Run GREEN and the generated-app checks**
 
 Run:
 
@@ -135,7 +135,7 @@ npm run lint
 
 Expected: all commands pass with no warnings.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add package.json package-lock.json next.config.ts tsconfig.json eslint.config.mjs postcss.config.mjs vitest.config.ts playwright.config.ts .env.example .gitignore src/db drizzle drizzle.config.ts tests/helpers tests/unit/db
@@ -156,7 +156,7 @@ git commit -m "build: scaffold Next.js and SQLite foundation"
 - Produces: `requireCustomer(actor)`, `requireDeveloper(actor)` and `canAccessProject(db, actor, projectId)`
 - Produces: `loginAction`, `logoutAction`, `changeOwnPasswordAction`
 
-- [ ] **Step 1: Write failing password and session tests**
+- [x] **Step 1: Write failing password and session tests**
 
 ```ts
 it("stores a salted scrypt hash and verifies it in constant-time code", async () => {
@@ -175,27 +175,27 @@ it("rejects a session immediately after the user is disabled", async () => {
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `npm test -- tests/unit/auth/password.test.ts tests/integration/auth/session.test.ts tests/unit/lib/csrf.test.ts`
 
 Expected: FAIL on missing password, session and same-origin implementations.
 
-- [ ] **Step 3: Implement password hashing, database-backed sessions and login throttling**
+- [x] **Step 3: Implement password hashing, database-backed sessions and login throttling**
 
 Use Node `crypto.scrypt` with a 16-byte salt, 64-byte key, `N=16384`, `r=8`, `p=1`; compare decoded buffers with `timingSafeEqual`. Generate 32 random token bytes, store only `sha256(token)`, expire after seven days, and join the active user on every lookup. Persist a five-attempt/15-minute throttle window keyed by normalized username plus source hash. All login failures return the same public message.
 
-- [ ] **Step 4: Implement Next.js cookie and action adapters**
+- [x] **Step 4: Implement Next.js cookie and action adapters**
 
 Set `request_manager_session` with `httpOnly`, `sameSite: "lax"`, `path: "/"`, seven-day expiry and environment-controlled `secure`. `changeOwnPasswordAction` verifies the old password, replaces the hash, clears `mustChangePassword`, revokes every session and redirects to login. `assertSameOrigin` compares `Origin` with `APP_ORIGIN` or the request host.
 
-- [ ] **Step 5: Run GREEN**
+- [x] **Step 5: Run GREEN**
 
 Run: `npm test -- tests/unit/auth tests/integration/auth tests/unit/lib/csrf.test.ts`
 
 Expected: password, session invalidation, generic login error, throttle and CSRF tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/auth src/lib tests/unit/auth tests/integration/auth tests/unit/lib
@@ -214,7 +214,7 @@ git commit -m "feat: add secure local authentication"
 - Produces: `createProject`, `updateProject`, `setProjectActive`, `listManageableProjects`
 - All commands consume `(db: AppDatabase, actor: AuthenticatedUser, input)` and return a discriminated `Result`.
 
-- [ ] **Step 1: Write failing permission and invariant tests**
+- [x] **Step 1: Write failing permission and invariant tests**
 
 ```ts
 it("prevents a developer from disabling self or the last active developer", async () => {
@@ -230,27 +230,27 @@ it("removes project access immediately when membership is revoked", async () => 
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `npm test -- tests/integration/accounts tests/integration/projects`
 
 Expected: FAIL because account and project services are missing.
 
-- [ ] **Step 3: Implement developer-only account commands**
+- [x] **Step 3: Implement developer-only account commands**
 
 Normalize usernames, enforce case-insensitive uniqueness, never expose password hashes, and use transactions for username changes, reset, activation and membership replacement. Reset creates a fresh scrypt hash, sets `mustChangePassword`, and revokes sessions. Role is chosen only at creation and is immutable thereafter.
 
-- [ ] **Step 4: Implement project commands and read rules**
+- [x] **Step 4: Implement project commands and read rules**
 
 Project code and name are required and unique where applicable. Disabling blocks new requests while retaining read-only history for assigned customers. Membership replacement accepts only active customer accounts and existing projects.
 
-- [ ] **Step 5: Run GREEN**
+- [x] **Step 5: Run GREEN**
 
 Run: `npm test -- tests/integration/accounts tests/integration/projects`
 
 Expected: role checks, uniqueness, session revocation, last-developer protection, disabled-project behavior and membership isolation pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/features/accounts src/features/projects tests/integration/accounts tests/integration/projects
@@ -270,7 +270,7 @@ git commit -m "feat: add account and project administration"
 - Produces: `canEditRequest(actor, request)`, `assertValidStateCombination(progress, recordState)`
 - Produces: `formatRequestNumber(id: number): string`, `parseRequestNumber(value: string): number | null`
 
-- [ ] **Step 1: Write failing policy and state tests**
+- [x] **Step 1: Write failing policy and state tests**
 
 ```ts
 it("allows only the creator to edit an active unscheduled request", () => {
@@ -285,31 +285,31 @@ it("permits customer pause only for their own active scheduled request", () => {
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `npm test -- tests/unit/requests/policy.test.ts tests/unit/requests/sorting.test.ts tests/integration/requests/request-service.test.ts`
 
 Expected: FAIL on missing request policy and service.
 
-- [ ] **Step 3: Implement request validation and transactional commands**
+- [x] **Step 3: Implement request validation and transactional commands**
 
 Validate trimmed content at 10-10,000 characters and closed enums. Creation derives customer/project/initial states server-side and uses `(createdById, idempotencyKey)` uniqueness. Every mutable command reloads the row inside the transaction, checks project access and expected `version`, performs a conditional update, increments version, updates `updatedAt`, and appends a public audit event. Developers never receive a command that edits customer content.
 
-- [ ] **Step 4: Implement authorized detail and globally sorted list queries**
+- [x] **Step 4: Implement authorized detail and globally sorted list queries**
 
 Customer queries join current project membership. Developer queries cover all projects. Apply search and filters before pagination. Customer order is SQL `CASE`: active pending first, other active second, paused third, then `updatedAt DESC, id DESC`; archived is excluded unless explicitly filtered. DTOs omit database-only idempotency keys and all private-note fields.
 
-- [ ] **Step 5: Verify stale-edit and IDOR boundaries**
+- [x] **Step 5: Verify stale-edit and IDOR boundaries**
 
 Add integration assertions that an open customer form cannot overwrite a request after developer scheduling, another project cannot read or mutate a guessed request ID, paused combinations remain `SCHEDULED + PAUSED`, and archived restore preserves progress while returning to `ACTIVE`.
 
-- [ ] **Step 6: Run GREEN**
+- [x] **Step 6: Run GREEN**
 
 Run: `npm test -- tests/unit/requests tests/integration/requests`
 
 Expected: policy, state, stable sorting, paging, idempotency, audit and concurrent-version tests pass.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/features/requests src/lib/request-number.ts src/lib/domain-error.ts tests/unit/requests tests/integration/requests
@@ -329,7 +329,7 @@ git commit -m "feat: implement request lifecycle"
 - Produces: `createRequestWithAttachments`, `editRequestWithAttachments`
 - Route contract: `POST /api/requests`, `PUT /api/requests/:requestNo`, `GET /api/attachments/:id`
 
-- [ ] **Step 1: Write failing signature and limit tests**
+- [x] **Step 1: Write failing signature and limit tests**
 
 ```ts
 it.each([
@@ -345,31 +345,31 @@ it("rejects SVG even when its declared MIME is image/png", async () => {
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `npm test -- tests/unit/attachments/validation.test.ts tests/integration/attachments tests/integration/api/request-route.test.ts`
 
 Expected: FAIL because attachment validators, storage and routes are missing.
 
-- [ ] **Step 3: Implement validation and protected local storage**
+- [x] **Step 3: Implement validation and protected local storage**
 
 Read at most 10 MiB plus one byte per file, detect content with `file-type`, enforce count and total size including retained attachments, compute SHA-256, and write to `data/tmp` under a random UUID. Commit uses atomic rename into a two-character prefix directory below `data/uploads`; paths are derived only from generated storage names.
 
-- [ ] **Step 4: Implement atomic create/edit coordination**
+- [x] **Step 4: Implement atomic create/edit coordination**
 
 Stage before the database transaction. Inside the transaction recheck authorization/state/version, move new files, insert/delete attachment rows and update the request. On any exception remove newly moved files and all temp files. After a successful edit commit, delete removed physical files; failures are logged for the consistency checker.
 
-- [ ] **Step 5: Implement same-origin multipart routes and authenticated image streaming**
+- [x] **Step 5: Implement same-origin multipart routes and authenticated image streaming**
 
 `POST` and `PUT` parse `FormData`, validate origin and session, and return stable JSON `{ ok, data | code, message, fieldErrors }`. The GET route resolves the attachment through the request and current project authorization, streams with the stored MIME and `X-Content-Type-Options: nosniff`, and returns 404 for both missing and unauthorized resources.
 
-- [ ] **Step 6: Run GREEN**
+- [x] **Step 6: Run GREEN**
 
 Run: `npm test -- tests/unit/attachments tests/integration/attachments tests/integration/api`
 
 Expected: MIME spoofing, limits, path traversal, orphan cleanup, stale edit, unauthorized URL, logout and membership revocation tests pass.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/features/attachments src/app/api tests/fixtures tests/unit/attachments tests/integration/attachments tests/integration/api
@@ -387,7 +387,7 @@ git commit -m "feat: secure request screenshot storage"
 - Produces: `listPublicRemarks`, `getOwnPrivateNote`, `listClarificationMessages`
 - All append operations accept `idempotencyKey`; note upsert is keyed by `(requestId, developerId)`.
 
-- [ ] **Step 1: Write failing clarification and privacy tests**
+- [x] **Step 1: Write failing clarification and privacy tests**
 
 ```ts
 it("sets pending on a developer question and clears it on the first project-customer reply", async () => {
@@ -405,27 +405,27 @@ it("never returns developer A's private note to developer B", async () => {
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `npm test -- tests/unit/communication tests/integration/communication`
 
 Expected: FAIL on missing communication policy and services.
 
-- [ ] **Step 3: Implement the three intentionally separate communication models**
+- [x] **Step 3: Implement the three intentionally separate communication models**
 
 Public remark and clarification messages are append-only, escaped plain text with author/time and unique idempotency keys. Private note is a developer-only upsert whose query always includes the current developer ID. Private-note content is absent from request DTOs, audit payloads, logs and other developers' queries.
 
-- [ ] **Step 4: Implement clarification transaction rules**
+- [x] **Step 4: Implement clarification transaction rules**
 
 Developer question writes a message and sets pending true in one transaction. A current project customer may reply only while the active request is pending; the first committed reply clears pending, and a stale second reply gets `STATE_CONFLICT`. Paused/archived records reject communication. Restore recomputes pending from the last clarification author role.
 
-- [ ] **Step 5: Run GREEN including cross-account payload assertions**
+- [x] **Step 5: Run GREEN including cross-account payload assertions**
 
 Run: `npm test -- tests/unit/communication tests/integration/communication`
 
 Expected: pending, repeated question, cross-customer reply, public remark independence, pause suppression, restore recomputation, idempotency and private payload isolation pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/features/communication tests/unit/communication tests/integration/communication
@@ -437,7 +437,7 @@ git commit -m "feat: add request communication tools"
 **Files:**
 - Modify: `src/app/layout.tsx`, `src/app/globals.css`, `src/app/page.tsx`
 - Create: `src/app/not-found.tsx`, `src/app/error.tsx`, `src/app/(auth)/login/page.tsx`, `src/app/(app)/layout.tsx`
-- Create: `src/app/(app)/requests/page.tsx`, `src/app/(app)/requests/new/page.tsx`, `src/app/(app)/requests/[requestId]/page.tsx`, `src/app/(app)/requests/[requestId]/edit/page.tsx`, `src/app/(app)/account/password/page.tsx`
+- Create: `src/app/(app)/requests/page.tsx`, `src/app/(app)/requests/new/page.tsx`, `src/app/(app)/requests/[requestId]/page.tsx`, `src/app/(app)/requests/[requestId]/edit/page.tsx`, `src/app/(password)/account/password/page.tsx`
 - Create: `src/components/ui/button.tsx`, `src/components/ui/icon-button.tsx`, `src/components/ui/field.tsx`, `src/components/ui/badge.tsx`, `src/components/ui/pagination.tsx`, `src/components/app-shell.tsx`, `src/components/page-header.tsx`, `src/components/confirm-dialog.tsx`
 - Create: `src/features/accounts/components/login-form.tsx`, `src/features/accounts/components/password-form.tsx`
 - Create: `src/features/requests/components/request-toolbar.tsx`, `src/features/requests/components/request-list.tsx`, `src/features/requests/components/request-form.tsx`, `src/features/requests/components/request-detail.tsx`, `src/features/requests/components/request-actions.tsx`
@@ -450,7 +450,7 @@ git commit -m "feat: add request communication tools"
 - `RequestForm` submits multipart data to the create/edit API with a stable idempotency key and expected version.
 - `RequestList` receives already globally sorted/paginated results and never performs client-only priority sorting.
 
-- [ ] **Step 1: Write failing component behavior tests**
+- [x] **Step 1: Write failing component behavior tests**
 
 ```tsx
 it("adds an image clipboard item without treating plain text as an attachment", async () => {
@@ -467,27 +467,27 @@ it("renders text as well as color for pending customer replies", () => {
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `npm test -- tests/components/screenshot-input.test.tsx tests/components/request-list.test.tsx`
 
 Expected: FAIL because customer components do not exist.
 
-- [ ] **Step 3: Build the quiet, responsive visual system and protected shell**
+- [x] **Step 3: Build the quiet, responsive visual system and protected shell**
 
 Use CSS variables for neutral surfaces, charcoal text, teal actions, amber priority and red pending state; do not use gradients, decorative floating sections or nested cards. Use Lucide icons in icon buttons with accessible names/tooltips. The protected layout awaits `requireCurrentUser`, redirects forced-password users, and renders desktop sidebar plus mobile header without trusting client role state.
 
-- [ ] **Step 4: Build login, password, list, request form and detail pages**
+- [x] **Step 4: Build login, password, list, request form and detail pages**
 
 Keep labels and errors in Chinese. Desktop list is a dense table; below 768 px it becomes fixed-dimension compact rows. Search and filters live in URL parameters. New/edit supports paste, drag, select, preview, removal, disabled submit and error recovery. Detail renders only role-appropriate sections and uses confirmation for pause/archive actions.
 
-- [ ] **Step 5: Run component GREEN and accessibility assertions**
+- [x] **Step 5: Run component GREEN and accessibility assertions**
 
 Run: `npm test -- tests/components`
 
 Expected: clipboard, limit messaging, pending text, role controls, form error association and stable mobile-row tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/app src/components src/features/*/components tests/components
@@ -507,7 +507,7 @@ git commit -m "feat: build customer request experience"
 - Forms consume the account/project actions defined in Task 3 and revalidate exact list/detail paths.
 - Request detail consumes Task 4 and Task 6 actions for status, record state, remark, note and clarification.
 
-- [ ] **Step 1: Write failing role and visibility tests**
+- [x] **Step 1: Write failing role and visibility tests**
 
 ```ts
 it("returns not found when a customer requests a management page", async () => {
@@ -521,27 +521,27 @@ it("keeps another developer's private note out of rendered payload", async () =>
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `npm test -- tests/components/developer-workbench.test.tsx tests/integration/pages/role-guards.test.ts`
 
 Expected: FAIL because developer pages and forms are absent.
 
-- [ ] **Step 3: Implement project and user administration**
+- [x] **Step 3: Implement project and user administration**
 
 Use compact tables and dialogs for clear commands only. Show account role, enabled state, forced-password state and project memberships. Developers can create, rename, reset, enable/disable and replace memberships; confirmations name the affected account/project. The UI must surface last-developer/self-disable errors returned by the server.
 
-- [ ] **Step 4: Complete the developer request workbench**
+- [x] **Step 4: Complete the developer request workbench**
 
 On request detail, developers can change progress, pause/resume/archive/restore, append public remarks, edit only their private note and ask clarification. Show public history with author/time and keep the three communication controls visually and semantically separate.
 
-- [ ] **Step 5: Run GREEN**
+- [x] **Step 5: Run GREEN**
 
 Run: `npm test -- tests/components/developer-workbench.test.tsx tests/integration/pages/role-guards.test.ts`
 
 Expected: management guards, action visibility, note payload isolation and all server error presentations pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/app/'(app)'/manage src/features/accounts/components src/features/projects/components tests/components/developer-workbench.test.tsx tests/integration/pages
@@ -560,7 +560,7 @@ git commit -m "feat: add developer administration workbench"
 - Commands: `npm run db:migrate`, `npm run admin:init`, `npm run ops:backup`, `npm run ops:restore -- <backup-dir>`, `npm run ops:attachments:check`, `npm run ops:attachments:repair`
 - Produces: versioned JSON `BackupManifest` with database and attachment SHA-256 values.
 
-- [ ] **Step 1: Write failing operational integrity tests**
+- [x] **Step 1: Write failing operational integrity tests**
 
 ```ts
 it("refuses to overwrite the first developer on repeated initialization", async () => {
@@ -579,31 +579,31 @@ it("restores a consistent database and protected screenshot set", async () => {
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `npm test -- tests/integration/ops`
 
 Expected: FAIL because operational commands and manifests are absent.
 
-- [ ] **Step 3: Implement explicit migration and safe first-developer initialization**
+- [x] **Step 3: Implement explicit migration and safe first-developer initialization**
 
 Migration prints before/after schema version and never runs implicitly in production startup. Initialization reads username, display name and password from explicit environment variables, validates them, and creates only when no enabled developer exists; it never logs the password.
 
-- [ ] **Step 4: Implement backup and restore**
+- [x] **Step 4: Implement backup and restore**
 
 Backup checkpoints WAL, uses the SQLite online backup API, copies only attachment rows present in the snapshot, hashes every file, writes a `.partial` directory and atomically renames on success. Restore requires an explicit confirmation flag, verifies all hashes, stages database/uploads beside live data, then atomically swaps while the documented process is stopped; failure leaves live paths unchanged.
 
-- [ ] **Step 5: Implement default-report attachment checking**
+- [x] **Step 5: Implement default-report attachment checking**
 
 Report missing, orphaned, wrong-size and wrong-hash files. Default never mutates. `--apply` removes only confirmed orphan files and still does not invent or delete database rows for missing files.
 
-- [ ] **Step 6: Run GREEN and rehearse commands on temporary paths**
+- [x] **Step 6: Run GREEN and rehearse commands on temporary paths**
 
 Run: `npm test -- tests/integration/ops`
 
 Expected: initialization idempotence, manifest validation, restore rollback, round-trip content and report-only checker tests pass.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/ops scripts tests/integration/ops package.json .env.example .gitignore
@@ -621,25 +621,25 @@ git commit -m "feat: add local operations and recovery tools"
 - E2E fixture users: developer A, developer B, project-A customer A, project-A customer B and unassigned customer.
 - Traceability maps `AUTH`, `PROJ`, `REQ`, `STATE`, `COMM`, `ATT`, `OPS`, `UX` to implementation modules and automated/manual evidence.
 
-- [ ] **Step 1: Write browser tests before completing browser-specific glue**
+- [x] **Step 1: Write browser tests before completing browser-specific glue**
 
 The lifecycle test must create a request using an image `DataTransfer`, schedule it, add public/private text, ask, assert global red pending priority, reply, assert removal, ask again, pause, restore, archive and find it through the archived filter. Access tests must visit guessed detail/action/image URLs. Private-note tests inspect rendered HTML and network payload for the other developer's secret value.
 
-- [ ] **Step 2: Run E2E RED**
+- [x] **Step 2: Run E2E RED**
 
 Run: `npm run test:e2e`
 
 Expected: FAIL at the first missing browser integration or selector, not from missing browser binaries or seed setup.
 
-- [ ] **Step 3: Complete browser glue and responsive behavior**
+- [x] **Step 3: Complete browser glue and responsive behavior**
 
 Fix only behavior required by failing tests. Run Chromium desktop plus Mobile Chrome. At 1440x900, 1024x768, 390x844 and 360x800 assert no horizontal overflow, obscured controls or layout shifts; screenshots use fixed aspect ratio and `object-fit: contain`.
 
-- [ ] **Step 4: Write the full aligned documentation set**
+- [x] **Step 4: Write the full aligned documentation set**
 
 README gives a five-minute start. Architecture explains module and transaction flows. Data model lists every table/constraint. Permissions reproduces the enforced matrix. User guide covers both roles without implementation jargon. Operations documents migration/bootstrap/backup/stopped restore/checker. Testing separates automated clipboard simulation from real system clipboard smoke evidence. Security covers scrypt, session digest, origin checks, IDOR and uploads. Traceability points every approved requirement to concrete files/tests. Mark the approved specification “Implemented and verified” only after all gates pass.
 
-- [ ] **Step 5: Run the complete automated gate**
+- [x] **Step 5: Run the complete automated gate**
 
 Run:
 
@@ -653,15 +653,15 @@ npm run build
 
 Expected: every command exits zero with no unhandled browser console error.
 
-- [ ] **Step 6: Rehearse fresh install and disaster recovery**
+- [x] **Step 6: Rehearse fresh install and disaster recovery**
 
 On isolated data paths: migrate an empty database, initialize a developer, verify repeated initialization refusal, create a screenshot request, back up, mutate, stop the app, restore, restart, and verify the original request plus image. Create one orphan file and one missing-file condition; prove check is report-only and repair removes only the orphan.
 
-- [ ] **Step 7: Verify the actual running app**
+- [x] **Step 7: Verify the actual running app**
 
 Start the production build on an unused localhost port, use real browser sessions for both roles, paste once from the operating-system clipboard, and capture desktop/mobile evidence. Confirm the process command/cwd uses the current build before declaring runtime completion.
 
-- [ ] **Step 8: Self-review documentation and diff, then commit**
+- [x] **Step 8: Self-review documentation and diff, then commit**
 
 Run:
 

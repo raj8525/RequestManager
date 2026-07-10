@@ -78,7 +78,7 @@ export function ProjectManager({ projects }: { projects: readonly Project[] }) {
                 <th scope="col">项目</th>
                 <th scope="col">说明</th>
                 <th scope="col">状态</th>
-                <th scope="col"><span className="sr-only">操作</span></th>
+                <th scope="col">操作</th>
               </tr>
             </thead>
             <tbody>

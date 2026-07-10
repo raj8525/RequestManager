@@ -84,7 +84,7 @@ export function AppShell({
           <strong>RequestManager</strong>
         </Link>
         <details className="mobile-menu">
-          <summary aria-label="打开导航" title="打开导航">
+          <summary aria-label="打开导航" title="打开导航" role="button">
             <Menu aria-hidden="true" size={20} />
           </summary>
           <div className="mobile-menu__panel">

@@ -54,7 +54,6 @@ export function RequestActions({
         setError(result.message ?? "操作失败，请刷新后重试");
         return;
       }
-      window.location.reload();
     } catch {
       setError("系统暂时不可用，请稍后重试");
     } finally {

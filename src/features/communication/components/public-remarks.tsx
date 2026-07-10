@@ -60,7 +60,6 @@ export function PublicRemarks({
       }
       setContent("");
       key.current = idempotencyKey();
-      window.location.reload();
     } catch {
       setError("备注提交失败，请稍后重试");
     } finally {

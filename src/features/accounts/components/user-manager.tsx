@@ -109,7 +109,7 @@ export function UserManager({
                 <th scope="col">状态</th>
                 <th scope="col">密码</th>
                 <th scope="col">项目权限</th>
-                <th scope="col"><span className="sr-only">操作</span></th>
+                <th scope="col">操作</th>
               </tr>
             </thead>
             <tbody>

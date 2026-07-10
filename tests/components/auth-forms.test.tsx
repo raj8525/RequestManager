@@ -44,7 +44,11 @@ describe("account forms", () => {
 
   it("prevents a password change when the confirmation differs", async () => {
     const action = vi.fn();
-    render(<PasswordForm submitAction={action} />);
+    render(<PasswordForm username="customer.one" submitAction={action} />);
+
+    expect(document.querySelector('input[autocomplete="username"]')).toHaveValue(
+      "customer.one",
+    );
 
     fireEvent.change(screen.getByLabelText("当前密码"), {
       target: { value: "current-password" },

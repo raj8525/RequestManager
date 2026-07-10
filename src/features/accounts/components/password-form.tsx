@@ -11,8 +11,10 @@ import type { ActionResult } from "@/lib/action-result";
 type PasswordSubmitResult = ActionResult<{ redirectTo: "/login" }>;
 
 export function PasswordForm({
+  username,
   submitAction = changePasswordRuntimeAction,
 }: {
+  username: string;
   submitAction?: (formData: FormData) => Promise<PasswordSubmitResult>;
 }) {
   const [confirmationError, setConfirmationError] = useState<string | null>(null);
@@ -47,6 +49,14 @@ export function PasswordForm({
 
   return (
     <form aria-label="修改密码" className="auth-form" onSubmit={handleSubmit}>
+      <input
+        type="text"
+        name="username"
+        autoComplete="username"
+        value={username}
+        readOnly
+        hidden
+      />
       {error ? (
         <div className="form-alert form-alert--error" role="alert">
           {error}

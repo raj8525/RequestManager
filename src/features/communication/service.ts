@@ -382,7 +382,6 @@ export async function saveOwnPrivateNote(
   const write = runCommunicationWrite(database, actor, (currentActor) => {
     const current = requireRequestAccess(database, currentActor, parsed.data.requestId);
     assertCommunicationWritable(current);
-    assertExpectedVersion(current, parsed.data.expectedVersion);
 
     const existing = database.db
       .select()

@@ -298,6 +298,24 @@ describe("request communication", () => {
     ).toHaveLength(1);
   });
 
+  it("keeps active private-note edits independent from public request versions", async () => {
+    const ctx = await context();
+    await addPublicRemark(ctx.database, ctx.developerA, {
+      requestId: ctx.request.id,
+      expectedVersion: ctx.request.version,
+      content: "Public activity advances the shared request version.",
+      idempotencyKey: "advance-before-private-note",
+    });
+
+    await expect(
+      saveOwnPrivateNote(ctx.database, ctx.developerA, {
+        requestId: ctx.request.id,
+        expectedVersion: ctx.request.version,
+        content: "This private note is still editable while the request is active.",
+      }),
+    ).resolves.toMatchObject({ ok: true });
+  });
+
   it("atomically clears pending on the first current-project customer reply", async () => {
     const ctx = await context();
     const question = {
