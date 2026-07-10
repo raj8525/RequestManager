@@ -141,11 +141,9 @@ function multipartBoundary(contentType: string | null): string | null {
     : match?.[2];
   if (
     !boundary ||
+    boundary.length > 70 ||
     boundary.endsWith(" ") ||
-    [...boundary].some((character) => {
-      const code = character.charCodeAt(0);
-      return code < 0x20 || code > 0x7e;
-    })
+    !/^[0-9A-Za-z'()+_,./:=? -]+$/.test(boundary)
   ) {
     return null;
   }
@@ -164,11 +162,8 @@ function skipTransportPadding(bytes: Buffer, offset: number): number {
 
 function assertMultipartPartLimit(
   body: Uint8Array,
-  contentType: string | null,
+  boundary: string,
 ): void {
-  const boundary = multipartBoundary(contentType);
-  if (!boundary) return;
-
   const bytes = Buffer.from(body.buffer, body.byteOffset, body.byteLength);
   const delimiter = Buffer.from(`--${boundary}`, "ascii");
   let searchOffset = 0;
@@ -204,9 +199,15 @@ function assertMultipartPartLimit(
 export async function boundedMultipartFormData(
   request: Request,
 ): Promise<FormData> {
-  const body = await readBoundedBody(request);
   const contentType = request.headers.get("content-type");
-  assertMultipartPartLimit(body, contentType);
+  const boundary = multipartBoundary(contentType);
+  if (!boundary) {
+    await cancelBody(request.body, "invalid multipart content type");
+    throw new Error("invalid multipart content type");
+  }
+
+  const body = await readBoundedBody(request);
+  assertMultipartPartLimit(body, boundary);
   const boundedRequest = new Request(request.url, {
     method: request.method,
     headers: contentType ? { "content-type": contentType } : undefined,

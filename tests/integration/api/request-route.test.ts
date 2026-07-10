@@ -216,6 +216,50 @@ describe("multipart request and protected attachment routes", () => {
     });
   });
 
+  it.each([
+    ["URL-encoded", "application/x-www-form-urlencoded"],
+    ["plain text", "text/plain"],
+    ["multipart without a boundary", "multipart/form-data"],
+    [
+      "multipart with an invalid boundary",
+      `multipart/form-data; boundary=${"a".repeat(71)}`,
+    ],
+  ])(
+    "rejects %s before invoking the platform FormData parser",
+    async (_case, contentType) => {
+      const db = database();
+      const paths = storage();
+      const owner = insertActor(db, "owner", "CUSTOMER");
+      const project = insertProject(db, "APP");
+      assign(db, owner.id, project.id);
+      const handler = createPostHandler({
+        database: db,
+        storagePaths: paths,
+        appOrigin: APP_ORIGIN,
+        resolveActor: async () => owner,
+      });
+      const request = new Request(`${APP_ORIGIN}/api/requests`, {
+        method: "POST",
+        headers: {
+          origin: APP_ORIGIN,
+          "content-type": contentType,
+        },
+        body: "untrusted request body",
+      });
+      const formDataParser = vi.spyOn(Request.prototype, "formData");
+
+      const response = await handler(request);
+
+      expect(response.status).toBe(400);
+      expect(formDataParser).not.toHaveBeenCalled();
+      await expect(response.json()).resolves.toEqual({
+        ok: false,
+        code: "INVALID_INPUT",
+        message: "提交的信息无效",
+      });
+    },
+  );
+
   it("rejects an oversized declared POST body before reading its stream", async () => {
     const db = database();
     const paths = storage();
