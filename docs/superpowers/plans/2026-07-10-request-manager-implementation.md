@@ -75,7 +75,9 @@ data/                   ignored runtime database, uploads, temp and backups
 Run:
 
 ```bash
-npx create-next-app@16.2.10 . --typescript --eslint --tailwind --app --src-dir --import-alias '@/*' --use-npm --yes
+SCAFFOLD_DIR="$(mktemp -d /tmp/request-manager-scaffold.XXXXXX)"
+npx create-next-app@16.2.10 "$SCAFFOLD_DIR" --typescript --eslint --tailwind --app --src-dir --import-alias '@/*' --use-npm --yes
+rsync -a --exclude .git --exclude node_modules "$SCAFFOLD_DIR"/ ./
 npm install drizzle-orm@0.45.2 better-sqlite3@12.11.1 zod@4.4.3 lucide-react@1.24.0 clsx@2.1.1 tailwind-merge@3.6.0 file-type@22.0.1
 npm install -D drizzle-kit@0.31.10 tsx@4.23.0 vitest@4.1.10 @playwright/test@1.61.1 @testing-library/react @testing-library/jest-dom jsdom@29.1.1 @types/better-sqlite3
 ```
