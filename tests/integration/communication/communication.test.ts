@@ -133,6 +133,37 @@ function currentRequest(context: Awaited<Fixture>) {
   return request;
 }
 
+async function makeCommunicationUnavailable(
+  context: Awaited<Fixture>,
+  recordStatus: "PAUSED" | "ARCHIVED",
+) {
+  const current = currentRequest(context);
+  if (recordStatus === "ARCHIVED") {
+    const archived = await archiveRequest(context.database, context.developerA, {
+      requestId: current.id,
+      expectedVersion: current.version,
+    });
+    if (!archived.ok) throw new Error(`archive failed: ${archived.code}`);
+  } else {
+    const scheduled = await changeProgress(
+      context.database,
+      context.developerA,
+      {
+        requestId: current.id,
+        expectedVersion: current.version,
+        progressStatus: "SCHEDULED",
+      },
+    );
+    if (!scheduled.ok) throw new Error(`schedule failed: ${scheduled.code}`);
+    const paused = await pauseRequest(context.database, context.developerA, {
+      requestId: current.id,
+      expectedVersion: scheduled.data.version,
+    });
+    if (!paused.ok) throw new Error(`pause failed: ${paused.code}`);
+  }
+  expect(currentRequest(context).recordStatus).toBe(recordStatus);
+}
+
 describe("request communication", () => {
   const cleanups: Array<() => void> = [];
 
@@ -333,6 +364,75 @@ describe("request communication", () => {
       ],
     });
   });
+
+  describe.each(["PAUSED", "ARCHIVED"] as const)(
+    "idempotent replay after a request becomes %s",
+    (recordStatus) => {
+      it("rejects an existing public remark key", async () => {
+        const ctx = await context();
+        const input = {
+          requestId: ctx.request.id,
+          expectedVersion: ctx.request.version,
+          content: "This public remark was created while the request was active.",
+          idempotencyKey: `remark-before-${recordStatus}`,
+        };
+        await expect(
+          addPublicRemark(ctx.database, ctx.developerA, input),
+        ).resolves.toMatchObject({ ok: true });
+
+        await makeCommunicationUnavailable(ctx, recordStatus);
+
+        await expect(
+          addPublicRemark(ctx.database, ctx.developerA, input),
+        ).resolves.toMatchObject({ ok: false, code: "STATE_CONFLICT" });
+      });
+
+      it("rejects an existing clarification question key", async () => {
+        const ctx = await context();
+        const input = {
+          requestId: ctx.request.id,
+          expectedVersion: ctx.request.version,
+          content: "This clarification was asked while the request was active.",
+          idempotencyKey: `question-before-${recordStatus}`,
+        };
+        await expect(
+          askClarification(ctx.database, ctx.developerA, input),
+        ).resolves.toMatchObject({ ok: true });
+
+        await makeCommunicationUnavailable(ctx, recordStatus);
+
+        await expect(
+          askClarification(ctx.database, ctx.developerA, input),
+        ).resolves.toMatchObject({ ok: false, code: "STATE_CONFLICT" });
+      });
+
+      it("rejects an existing clarification reply key", async () => {
+        const ctx = await context();
+        const asked = await askClarification(ctx.database, ctx.developerA, {
+          requestId: ctx.request.id,
+          expectedVersion: ctx.request.version,
+          content: "Please confirm this before the request becomes unavailable.",
+          idempotencyKey: `question-for-reply-before-${recordStatus}`,
+        });
+        if (!asked.ok) throw new Error(`question failed: ${asked.code}`);
+        const input = {
+          requestId: ctx.request.id,
+          expectedVersion: currentRequest(ctx).version,
+          content: "This reply was submitted while the request was active.",
+          idempotencyKey: `reply-before-${recordStatus}`,
+        };
+        await expect(
+          replyToClarification(ctx.database, ctx.owner, input),
+        ).resolves.toMatchObject({ ok: true });
+
+        await makeCommunicationUnavailable(ctx, recordStatus);
+
+        await expect(
+          replyToClarification(ctx.database, ctx.owner, input),
+        ).resolves.toMatchObject({ ok: false, code: "STATE_CONFLICT" });
+      });
+    },
+  );
 
   it("rejects writes while paused or archived and recomputes pending on resume and restore", async () => {
     const ctx = await context();

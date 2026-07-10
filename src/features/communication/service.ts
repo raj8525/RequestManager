@@ -333,13 +333,13 @@ export async function addPublicRemark(
 
   const write = runCommunicationWrite(database, actor, (currentActor) => {
     const current = requireRequestAccess(database, currentActor, parsed.data.requestId);
+    assertCommunicationWritable(current);
     const existing = getExistingPublicRemark(
       database,
       currentActor.id,
       parsed.data,
     );
     if (existing) return { actor: currentActor, remark: existing };
-    assertCommunicationWritable(current);
     assertExpectedVersion(current, parsed.data.expectedVersion);
 
     const now = new Date();
@@ -429,6 +429,7 @@ export async function askClarification(
 
   const write = runCommunicationWrite(database, actor, (currentActor) => {
     const current = requireRequestAccess(database, currentActor, parsed.data.requestId);
+    assertCommunicationWritable(current);
     const existing = getExistingClarificationMessage(
       database,
       currentActor.id,
@@ -436,7 +437,6 @@ export async function askClarification(
       parsed.data,
     );
     if (existing) return { actor: currentActor, message: existing };
-    assertCommunicationWritable(current);
     assertExpectedVersion(current, parsed.data.expectedVersion);
 
     const now = new Date();
@@ -474,6 +474,7 @@ export async function replyToClarification(
 
   const write = runCommunicationWrite(database, actor, (currentActor) => {
     const current = requireRequestAccess(database, currentActor, parsed.data.requestId);
+    assertCommunicationWritable(current);
     const existing = getExistingClarificationMessage(
       database,
       currentActor.id,
@@ -481,7 +482,6 @@ export async function replyToClarification(
       parsed.data,
     );
     if (existing) return { actor: currentActor, message: existing };
-    assertCommunicationWritable(current);
     if (!current.needsCustomerReply) {
       throw new DomainError("STATE_CONFLICT", "该问题已被回复");
     }
