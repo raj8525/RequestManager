@@ -73,6 +73,55 @@ describe("ScreenshotInput", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it("counts retained screenshots when enforcing the eight-image limit", () => {
+    const onChange = vi.fn();
+    render(
+      <ScreenshotInput
+        value={[]}
+        existingCount={8}
+        existingSizeBytes={8}
+        onChange={onChange}
+      />,
+    );
+
+    fireEvent.drop(screen.getByTestId("screenshot-input"), {
+      dataTransfer: pasteData(
+        new File(["next"], "screen-next.png", { type: "image/png" }),
+      ),
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "每条需求最多上传 8 张截图",
+    );
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("counts retained screenshot bytes when enforcing the combined size limit", () => {
+    const onChange = vi.fn();
+    render(
+      <ScreenshotInput
+        value={[]}
+        existingCount={3}
+        existingSizeBytes={25 * 1024 * 1024}
+        onChange={onChange}
+      />,
+    );
+    const next = new File(
+      [new Uint8Array(6 * 1024 * 1024)],
+      "large-but-valid.png",
+      { type: "image/png" },
+    );
+
+    fireEvent.drop(screen.getByTestId("screenshot-input"), {
+      dataTransfer: pasteData(next),
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "全部截图合计不能超过 30",
+    );
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it("rejects unsupported images before submission", () => {
     const onChange = vi.fn();
     render(<ScreenshotInput value={[]} onChange={onChange} />);

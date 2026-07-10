@@ -29,10 +29,14 @@ export function ScreenshotInput({
   value,
   onChange,
   disabled = false,
+  existingCount = 0,
+  existingSizeBytes = 0,
 }: {
   value: readonly File[];
   onChange: (files: File[]) => void;
   disabled?: boolean;
+  existingCount?: number;
+  existingSizeBytes?: number;
 }) {
   const [error, setError] = useState<string | null>(null);
   const previews = useMemo(
@@ -58,7 +62,7 @@ export function ScreenshotInput({
 
   function addFiles(files: readonly File[]) {
     if (disabled || files.length === 0) return;
-    if (value.length + files.length > MAX_ATTACHMENT_COUNT) {
+    if (existingCount + value.length + files.length > MAX_ATTACHMENT_COUNT) {
       setError(`每条需求最多上传 ${MAX_ATTACHMENT_COUNT} 张截图`);
       return;
     }
@@ -74,7 +78,7 @@ export function ScreenshotInput({
     }
     const totalBytes = [...value, ...files].reduce(
       (total, file) => total + file.size,
-      0,
+      existingSizeBytes,
     );
     if (totalBytes > MAX_ATTACHMENTS_TOTAL_BYTES) {
       setError(`全部截图合计不能超过 ${formatMegabytes(MAX_ATTACHMENTS_TOTAL_BYTES)}`);

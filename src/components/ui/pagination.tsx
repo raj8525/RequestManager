@@ -28,6 +28,19 @@ export function Pagination({
   pageCount: number;
   total: number;
 }) {
+  if (page > 1 && page > pageCount) {
+    return (
+      <nav className="pagination" aria-label="需求分页">
+        <span>当前页没有内容，共 {total} 条</span>
+        <div>
+          <Link href={pageHref(pathname, searchParams, 1)} aria-label="回到第一页">
+            <ChevronLeft aria-hidden="true" size={17} />
+            回到第一页
+          </Link>
+        </div>
+      </nav>
+    );
+  }
   if (pageCount <= 1) {
     return <p className="pagination-summary">共 {total} 条</p>;
   }

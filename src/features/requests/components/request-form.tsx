@@ -231,6 +231,7 @@ export function RequestForm({
           <span className="field__label">已有截图</span>
           <AttachmentGallery
             attachments={retainedAttachments}
+            disabled={isPending}
             onRemove={(attachmentId) =>
               setRetainedAttachments((current) =>
                 current.filter((attachment) => attachment.id !== attachmentId),
@@ -244,7 +245,16 @@ export function RequestForm({
         <span className="field__label">
           {mode === "create" ? "截图" : "补充截图"}
         </span>
-        <ScreenshotInput value={newFiles} onChange={setNewFiles} disabled={isPending} />
+        <ScreenshotInput
+          value={newFiles}
+          existingCount={retainedAttachments.length}
+          existingSizeBytes={retainedAttachments.reduce(
+            (total, attachment) => total + attachment.sizeBytes,
+            0,
+          )}
+          onChange={setNewFiles}
+          disabled={isPending}
+        />
         {attachmentError ? (
           <p className="field__error" role="alert">
             {attachmentError}

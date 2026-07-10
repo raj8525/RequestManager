@@ -11,9 +11,11 @@ function formatSize(bytes: number): string {
 export function AttachmentGallery({
   attachments,
   onRemove,
+  disabled = false,
 }: {
   attachments: readonly AttachmentDto[];
   onRemove?: (attachmentId: number) => void;
+  disabled?: boolean;
 }) {
   if (attachments.length === 0) {
     return <p className="section-empty">暂无截图</p>;
@@ -52,6 +54,7 @@ export function AttachmentGallery({
               <IconButton
                 label={`移除 ${attachment.originalName}`}
                 icon={<X size={16} />}
+                disabled={disabled}
                 onClick={() => onRemove(attachment.id)}
               />
             ) : null}

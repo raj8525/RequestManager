@@ -37,4 +37,18 @@ Final component result: 5 files and 16 tests passed.
 
 ## Boundary
 
-Developer project/account management links are present in the shell, while their screens remain Task 8 scope as specified. The temporary browser artifacts, smoke database and development server were removed or stopped before commit.
+Developer project/account management links are intentionally withheld until their Task 8 screens exist, so the Task 7 shell exposes no dead navigation. The temporary browser artifacts, smoke database and development server were removed or stopped before commit.
+
+## UI review remediation
+
+- Removed the developer management dead links pending Task 8, while retaining the request list, password and logout paths on desktop and mobile.
+- Made edit-time screenshot limits account for retained and newly selected files together: at most 8 images and 30 MiB total. Retained attachment removal is disabled for the full pending submission window.
+- Upgraded confirmation dialogs with bidirectional Tab trapping, Escape handling, prior-focus capture and focus restoration. Backdrop, Escape and both actions cannot cancel a pending operation.
+- Added invalid-page recovery that preserves active filters and returns directly to page one, including when the current result set has zero or one page.
+- Stabilized mobile request rows with a 304 px height, explicit `88px 82px 44px 44px` grid rows and bounded cell overflow. Compact actions stay on one horizontally scrollable line without removing any row field.
+
+Review TDD began with 8 expected failures across dead navigation, retained screenshot count/bytes, pending removal, dialog focus behavior and pagination recovery. Focused behavior then passed 15/15 tests; the final component suite passed 25/25 tests.
+
+Authenticated Playwright checks used deliberately long project, submitter and summary text. Before the responsive fix, 360 px rows varied from 322.5 to 357.5 px and compact actions wrapped to 69.5-104.5 px. At both 360x800 and 390x844 after the fix, all rows measured exactly 304 px, actions measured 34 px with `nowrap` and `overflow-x: auto`, no table cell was clipped, and the document had no horizontal overflow.
+
+Final verification: 23 test files and 131 tests passed; typecheck, lint and production build passed.

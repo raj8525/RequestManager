@@ -1,11 +1,9 @@
 import {
   ClipboardList,
-  FolderKanban,
   KeyRound,
   LogOut,
   Menu,
   Plus,
-  UsersRound,
 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -25,18 +23,7 @@ function Navigation({ actor }: { actor: AuthenticatedUser }) {
           <Plus aria-hidden="true" size={18} />
           新建需求
         </Link>
-      ) : (
-        <>
-          <Link href="/manage/projects">
-            <FolderKanban aria-hidden="true" size={18} />
-            项目管理
-          </Link>
-          <Link href="/manage/users">
-            <UsersRound aria-hidden="true" size={18} />
-            账号管理
-          </Link>
-        </>
-      )}
+      ) : null}
     </nav>
   );
 }

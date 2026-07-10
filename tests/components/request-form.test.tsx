@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RequestForm } from "@/features/requests/components/request-form";
+import type { RequestDto } from "@/features/requests/presenter";
 
 afterEach(cleanup);
 
@@ -71,5 +72,50 @@ describe("RequestForm", () => {
     expect(first).toBeInstanceOf(FormData);
     expect(first.get("idempotencyKey")).toBeTruthy();
     expect(second.get("idempotencyKey")).toBe(first.get("idempotencyKey"));
+  });
+
+  it("disables removal of retained screenshots while an edit is submitting", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+    const initialRequest: RequestDto = {
+      id: 7,
+      requestNumber: "REQ-000007",
+      projectId: 2,
+      createdById: 3,
+      content: "保存按钮点击后没有响应，需要修复。",
+      summary: "保存按钮点击后没有响应，需要修复。",
+      requestType: "BUG",
+      priority: "NORMAL",
+      progressStatus: "UNSCHEDULED",
+      recordStatus: "ACTIVE",
+      needsCustomerReply: false,
+      version: 2,
+      createdAt: new Date("2026-07-09T09:00:00.000Z"),
+      updatedAt: new Date("2026-07-10T09:00:00.000Z"),
+    };
+    render(
+      <RequestForm
+        mode="edit"
+        projects={[{ id: 2, code: "WEB", name: "门户网站" }]}
+        initialRequest={initialRequest}
+        initialAttachments={[
+          {
+            id: 11,
+            originalName: "existing.png",
+            mimeType: "image/png",
+            sizeBytes: 1024,
+            createdAt: new Date("2026-07-10T08:00:00.000Z"),
+            url: "/api/attachments/11",
+          },
+        ]}
+      />,
+    );
+
+    const removeButton = screen.getByRole("button", {
+      name: "移除 existing.png",
+    });
+    expect(removeButton).toBeEnabled();
+    fireEvent.submit(screen.getByRole("form", { name: "编辑需求" }));
+
+    await waitFor(() => expect(removeButton).toBeDisabled());
   });
 });
