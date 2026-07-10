@@ -48,15 +48,15 @@ export function isLoginThrottled(
   );
 }
 
-export function recordLoginFailure(
+export function reserveLoginAttempt(
   database: AppDatabase,
   username: string,
   source: string,
   now = new Date(),
-): void {
+): boolean {
   const key = throttleKey(username, source);
 
-  database.sqlite.transaction(() => {
+  return database.sqlite.transaction(() => {
     const row = database.db
       .select()
       .from(authThrottle)
@@ -70,6 +70,8 @@ export function recordLoginFailure(
     const expired =
       !row ||
       now.getTime() - row.windowStartedAt.getTime() >= LOGIN_THROTTLE_WINDOW_MS;
+
+    if (!expired && row.failureCount >= LOGIN_FAILURE_LIMIT) return false;
 
     if (!row) {
       database.db
@@ -92,7 +94,9 @@ export function recordLoginFailure(
         )
         .run();
     }
-  })();
+
+    return true;
+  }).immediate();
 }
 
 export function clearLoginFailures(

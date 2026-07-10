@@ -14,14 +14,26 @@ describe("assertSameOrigin", () => {
     ).not.toThrow();
   });
 
-  it("accepts an origin matching the request host", () => {
+  it("rejects an origin that matches the request host but not APP_ORIGIN", () => {
     const request = new Request("http://localhost/actions", {
       headers: { host: "localhost:3000", origin: "http://localhost:3000" },
     });
 
     expect(() =>
       assertSameOrigin(request, "https://requests.example.test"),
-    ).not.toThrow();
+    ).toThrow(SameOriginError);
+  });
+
+  it("rejects the configured host and port over a different protocol", () => {
+    const headers = new Headers({
+      host: "requests.example.test",
+      origin: "http://requests.example.test",
+      "x-forwarded-proto": "http",
+    });
+
+    expect(() =>
+      assertSameOrigin(headers, "https://requests.example.test"),
+    ).toThrow(SameOriginError);
   });
 
   it("rejects missing, opaque and cross-origin requests", () => {

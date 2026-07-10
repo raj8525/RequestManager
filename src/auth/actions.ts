@@ -16,9 +16,8 @@ import {
 } from "@/auth/session-service";
 import {
   clearLoginFailures,
-  isLoginThrottled,
   normalizeUsername,
-  recordLoginFailure,
+  reserveLoginAttempt,
 } from "@/auth/throttle";
 import { users } from "@/db/schema";
 import type { AppDatabase } from "@/db/types";
@@ -31,6 +30,7 @@ import { assertSameOrigin } from "@/lib/csrf";
 import { getEnvironment } from "@/lib/env";
 
 export const GENERIC_LOGIN_ERROR = "用户名或密码错误";
+export const UNTRUSTED_PROXY_SOURCE_BUCKET = "untrusted-proxy-shared-bucket";
 
 type LoginInput = { username: string; password: string } | FormData;
 type PasswordInput =
@@ -43,6 +43,7 @@ export type AuthActionContext = {
   now?: Date;
   appOrigin?: string;
   secureCookies?: boolean;
+  trustProxyHeaders?: boolean;
   source?: string;
   redirect?: (path: string) => void;
 };
@@ -65,24 +66,32 @@ function inputValue(input: FormData | Record<string, string>, key: string): stri
   return input[key] ?? "";
 }
 
-function sourceFromHeaders(requestHeaders: Headers): string {
+function sourceFromHeaders(
+  requestHeaders: Headers,
+  trustProxyHeaders: boolean,
+): string {
+  if (!trustProxyHeaders) return UNTRUSTED_PROXY_SOURCE_BUCKET;
+
   return (
     requestHeaders.get("x-forwarded-for")?.split(",", 1)[0]?.trim() ||
-    requestHeaders.get("x-real-ip") ||
-    "unknown"
+    requestHeaders.get("x-real-ip")?.trim() ||
+    UNTRUSTED_PROXY_SOURCE_BUCKET
   );
 }
 
 async function resolveContext(context: AuthActionContext = {}): Promise<ResolvedContext> {
   const environment = getEnvironment();
   const requestHeaders = context.headers ?? (await headers());
+  const trustProxyHeaders =
+    context.trustProxyHeaders ?? environment.trustProxyHeaders;
   return {
     headers: requestHeaders,
     cookies: context.cookies ?? ((await cookies()) as SessionCookieStore),
     now: context.now ?? new Date(),
     appOrigin: context.appOrigin ?? environment.appOrigin,
     secureCookies: context.secureCookies ?? environment.secureCookies,
-    source: context.source ?? sourceFromHeaders(requestHeaders),
+    source:
+      context.source ?? sourceFromHeaders(requestHeaders, trustProxyHeaders),
     redirect: context.redirect,
   };
 }
@@ -97,7 +106,7 @@ export async function loginAction(
 
   const username = normalizeUsername(inputValue(input, "username"));
   const password = inputValue(input, "password");
-  if (isLoginThrottled(database, username, resolved.source, resolved.now)) {
+  if (!reserveLoginAttempt(database, username, resolved.source, resolved.now)) {
     return actionFailure("INVALID_CREDENTIALS", GENERIC_LOGIN_ERROR);
   }
 
@@ -111,7 +120,6 @@ export async function loginAction(
     : (await hashPassword(password), false);
 
   if (!user || !user.isActive || !passwordMatches) {
-    recordLoginFailure(database, username, resolved.source, resolved.now);
     return actionFailure("INVALID_CREDENTIALS", GENERIC_LOGIN_ERROR);
   }
 

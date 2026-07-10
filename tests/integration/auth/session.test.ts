@@ -24,7 +24,7 @@ import {
 } from "@/auth/session-service";
 import {
   isLoginThrottled,
-  recordLoginFailure,
+  reserveLoginAttempt,
 } from "@/auth/throttle";
 import {
   authThrottle,
@@ -76,6 +76,21 @@ function actionContext(
   };
 }
 
+function forwardedActionContext(
+  source: string,
+  trustProxyHeaders?: boolean,
+): AuthActionContext {
+  return actionContext(new TestCookies(), {
+    headers: new Headers({
+      host: "requests.example.test",
+      origin: "https://requests.example.test",
+      "x-forwarded-for": source,
+      "x-forwarded-proto": "https",
+    }),
+    trustProxyHeaders,
+  });
+}
+
 async function insertUser(
   db: TestDatabase,
   input: {
@@ -105,7 +120,10 @@ async function insertUser(
 
 describe("database-backed sessions", () => {
   const cleanups: Array<() => void> = [];
-  afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()));
+  afterEach(() => {
+    cleanups.splice(0).forEach((cleanup) => cleanup());
+    vi.unstubAllEnvs();
+  });
 
   function database() {
     const db = createTestDatabase();
@@ -201,11 +219,15 @@ describe("database-backed sessions", () => {
     const db = database();
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      expect(isLoginThrottled(db, " Alice ", "203.0.113.10", NOW)).toBe(false);
-      recordLoginFailure(db, " Alice ", "203.0.113.10", NOW);
+      expect(
+        reserveLoginAttempt(db, " Alice ", "203.0.113.10", NOW),
+      ).toBe(true);
     }
 
     expect(isLoginThrottled(db, "ALICE", "203.0.113.10", NOW)).toBe(true);
+    expect(
+      reserveLoginAttempt(db, "ALICE", "203.0.113.10", NOW),
+    ).toBe(false);
     expect(db.db.select().from(authThrottle).get()).toMatchObject({
       normalizedUsername: "alice",
       failureCount: 5,
@@ -218,6 +240,15 @@ describe("database-backed sessions", () => {
         new Date(NOW.getTime() + 15 * 60 * 1_000),
       ),
     ).toBe(false);
+    expect(
+      reserveLoginAttempt(
+        db,
+        "alice",
+        "203.0.113.10",
+        new Date(NOW.getTime() + 15 * 60 * 1_000),
+      ),
+    ).toBe(true);
+    expect(db.db.select().from(authThrottle).get()?.failureCount).toBe(1);
   });
 
   it("uses one public error for unknown, invalid and throttled logins", async () => {
@@ -257,6 +288,70 @@ describe("database-backed sessions", () => {
     }
   });
 
+  it("uses one fail-closed source bucket when proxy headers are not trusted", async () => {
+    const db = database();
+    await insertUser(db);
+    vi.stubEnv("TRUST_PROXY_HEADERS", "");
+
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      await loginAction(
+        db,
+        { username: "alice", password: "wrong" },
+        forwardedActionContext(`203.0.113.${attempt}`),
+      );
+    }
+    const spoofedSixth = await loginAction(
+      db,
+      { username: "alice", password: "initial password" },
+      forwardedActionContext("198.51.100.100"),
+    );
+
+    expect(spoofedSixth).toMatchObject({
+      ok: false,
+      code: "INVALID_CREDENTIALS",
+      message: GENERIC_LOGIN_ERROR,
+    });
+  });
+
+  it("uses proxy-provided source buckets only when explicitly trusted", async () => {
+    const db = database();
+    await insertUser(db);
+    vi.stubEnv("TRUST_PROXY_HEADERS", "true");
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await loginAction(
+        db,
+        { username: "alice", password: "wrong" },
+        forwardedActionContext("203.0.113.10"),
+      );
+    }
+    const differentSource = await loginAction(
+      db,
+      { username: "alice", password: "initial password" },
+      forwardedActionContext("198.51.100.20"),
+    );
+
+    expect(differentSource).toMatchObject({ ok: true });
+  });
+
+  it("reserves the five throttle slots before concurrent password checks", async () => {
+    const db = database();
+    await insertUser(db);
+    const context = actionContext(new TestCookies(), {
+      source: "concurrent-source",
+    });
+
+    const results = await Promise.all(
+      Array.from({ length: 6 }, () =>
+        loginAction(db, { username: "alice", password: "wrong" }, context),
+      ),
+    );
+
+    expect(results).toHaveLength(6);
+    expect(results.every((result) => !result.ok)).toBe(true);
+    expect(db.db.select().from(authThrottle).get()?.failureCount).toBe(5);
+  });
+
   it("sets the hardened session cookie after login and clears it on logout", async () => {
     const db = database();
     const user = await insertUser(db);
@@ -281,6 +376,7 @@ describe("database-backed sessions", () => {
       },
     });
     expect(getSessionUser(db, cookies.writes[0].value, NOW)?.id).toBe(user.id);
+    expect(db.db.select().from(authThrottle).all()).toHaveLength(0);
 
     const logoutResult = await logoutAction(db, context);
     expect(logoutResult).toMatchObject({ ok: true });

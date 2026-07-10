@@ -30,13 +30,5 @@ export function assertSameOrigin(
     throw new SameOriginError();
   }
 
-  if (origin.origin === applicationOrigin) return;
-
-  const host = headers.get("x-forwarded-host") ?? headers.get("host");
-  if (!host || origin.host !== host) throw new SameOriginError();
-
-  const forwardedProtocol = headers.get("x-forwarded-proto")?.split(",", 1)[0]?.trim();
-  if (forwardedProtocol && origin.protocol !== `${forwardedProtocol}:`) {
-    throw new SameOriginError();
-  }
+  if (origin.origin !== applicationOrigin) throw new SameOriginError();
 }
