@@ -1,7 +1,16 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
+import { migrate as runDrizzleMigrations } from "drizzle-orm/better-sqlite3/migrator";
 import { afterEach, describe, expect, it } from "vitest";
 import { closeDatabase, createDatabase } from "@/db/client";
 import { migrateDatabase } from "@/db/migrate";
@@ -52,6 +61,16 @@ type ForeignKeyRow = {
   table: string;
   to: string;
 };
+
+type MigrationJournal = {
+  version: string;
+  dialect: string;
+  entries: unknown[];
+};
+
+const migrationsSource = fileURLToPath(
+  new URL("../../../drizzle/", import.meta.url),
+);
 
 describe("createDatabase", () => {
   const cleanups: Array<() => void> = [];
@@ -147,6 +166,79 @@ describe("createDatabase", () => {
 
     expect(tables.map(({ name }) => name)).toEqual(expectedTables);
     expect(foreignKeys.sort()).toEqual([...expectedForeignKeys].sort());
+  });
+
+  it("adds an empty immutable creation fingerprint when upgrading existing requests", () => {
+    const directory = mkdtempSync(join(tmpdir(), "request-manager-migration-test-"));
+    const legacyMigrations = join(directory, "legacy-migrations");
+    mkdirSync(join(legacyMigrations, "meta"), { recursive: true });
+    for (const file of [
+      "0000_initial.sql",
+      "0001_project-code-case-insensitive.sql",
+    ]) {
+      copyFileSync(join(migrationsSource, file), join(legacyMigrations, file));
+    }
+    const journal = JSON.parse(
+      readFileSync(join(migrationsSource, "meta", "_journal.json"), "utf8"),
+    ) as MigrationJournal;
+    writeFileSync(
+      join(legacyMigrations, "meta", "_journal.json"),
+      JSON.stringify({ ...journal, entries: journal.entries.slice(0, 2) }),
+    );
+
+    const database = createDatabase(join(directory, "upgrade.db"));
+    cleanups.push(() => {
+      closeDatabase(database);
+      rmSync(directory, { force: true, recursive: true });
+    });
+    runDrizzleMigrations(database.db, { migrationsFolder: legacyMigrations });
+
+    const customerId = database.sqlite
+      .prepare(
+        "insert into users (username, display_name, password_hash, role) values (?, ?, ?, ?)",
+      )
+      .run("legacy-customer", "Legacy customer", "hash", "CUSTOMER")
+      .lastInsertRowid;
+    const projectId = database.sqlite
+      .prepare("insert into projects (code, name) values (?, ?)")
+      .run("LEGACY", "Legacy project").lastInsertRowid;
+    database.sqlite
+      .prepare(
+        "insert into requests (project_id, created_by_id, content, request_type, priority, idempotency_key) values (?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        projectId,
+        customerId,
+        "A legacy sufficiently detailed request",
+        "BUG",
+        "NORMAL",
+        "legacy-key",
+      );
+
+    migrateDatabase(database);
+
+    const columns = database.sqlite.pragma("table_info(requests)") as Array<{
+      name: string;
+      notnull: number;
+      dflt_value: string | null;
+    }>;
+    expect(columns).toContainEqual(
+      expect.objectContaining({
+        name: "create_payload_fingerprint",
+        notnull: 1,
+        dflt_value: "''",
+      }),
+    );
+    expect(
+      database.sqlite
+        .prepare(
+          "select content, create_payload_fingerprint as createPayloadFingerprint from requests where id = 1",
+        )
+        .get(),
+    ).toEqual({
+      content: "A legacy sufficiently detailed request",
+      createPayloadFingerprint: "",
+    });
   });
 
   it("enforces append idempotency and one private note per developer", () => {

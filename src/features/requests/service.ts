@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { and, eq, sql } from "drizzle-orm";
 import type { ZodError, ZodType } from "zod";
 
@@ -97,6 +99,21 @@ function authorizeRole(
 function authorizeActor(actor: AuthenticatedUser): ActionFailure | null {
   if (!actor.mustChangePassword) return null;
   return actionFailure("PASSWORD_CHANGE_REQUIRED", "请先修改密码");
+}
+
+function fingerprintCreatePayload(input: {
+  projectId: number;
+  content: string;
+  requestType: Request["requestType"];
+  priority: Request["priority"];
+}): string {
+  const normalizedPayload = JSON.stringify({
+    projectId: input.projectId,
+    content: input.content,
+    requestType: input.requestType,
+    priority: input.priority,
+  });
+  return createHash("sha256").update(normalizedPayload, "utf8").digest("hex");
 }
 
 function requireLiveActor(
@@ -254,6 +271,7 @@ export async function createRequest(
   if (denied) return denied;
   const parsed = parseInput(createRequestSchema, input);
   if (!parsed.ok) return parsed.result;
+  const createPayloadFingerprint = fingerprintCreatePayload(parsed.data);
 
   const write = runRequestWrite(database, actor, (currentActor) => {
     requireActiveCustomerProject(database, currentActor, parsed.data.projectId);
@@ -269,12 +287,10 @@ export async function createRequest(
       )
       .get();
     if (existing) {
-      const matches =
-        existing.projectId === parsed.data.projectId &&
-        existing.content === parsed.data.content &&
-        existing.requestType === parsed.data.requestType &&
-        existing.priority === parsed.data.priority;
-      if (!matches) {
+      if (
+        existing.createPayloadFingerprint.length === 0 ||
+        existing.createPayloadFingerprint !== createPayloadFingerprint
+      ) {
         throw new DomainError("CONFLICT", "幂等键已用于其他需求内容");
       }
       return existing;
@@ -294,6 +310,7 @@ export async function createRequest(
         needsCustomerReply: false,
         version: 1,
         idempotencyKey: parsed.data.idempotencyKey,
+        createPayloadFingerprint,
         createdAt: now,
         updatedAt: now,
       })

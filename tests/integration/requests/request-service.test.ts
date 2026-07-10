@@ -181,6 +181,102 @@ describe("request domain service", () => {
     ]);
   });
 
+  it("replays the immutable normalized creation payload after customer edits", async () => {
+    const db = database();
+    const owner = insertActor(db, "owner", "CUSTOMER");
+    const project = insertProject(db, "APP");
+    assign(db, owner.id, project.id);
+
+    const originalInput = {
+      projectId: project.id,
+      content: "  The original sufficiently detailed customer request  ",
+      requestType: "BUG" as const,
+      priority: "NORMAL" as const,
+      idempotencyKey: "immutable-create-payload",
+    };
+    const created = await createRequest(db, owner, originalInput);
+    if (!created.ok) throw new Error(`creation failed: ${created.code}`);
+    const creationFingerprint = db.db
+      .select({ value: requests.createPayloadFingerprint })
+      .from(requests)
+      .where(eq(requests.id, created.data.id))
+      .get()?.value;
+    expect(creationFingerprint).toMatch(/^[a-f0-9]{64}$/);
+
+    const edited = await updateOwnRequest(db, owner, {
+      requestId: created.data.id,
+      expectedVersion: created.data.version,
+      content: "The edited and still sufficiently detailed customer request",
+      requestType: "CHANGE",
+      priority: "URGENT",
+    });
+    if (!edited.ok) throw new Error(`edit failed: ${edited.code}`);
+    expect(
+      db.db
+        .select({ value: requests.createPayloadFingerprint })
+        .from(requests)
+        .where(eq(requests.id, created.data.id))
+        .get()?.value,
+    ).toBe(creationFingerprint);
+
+    const originalReplay = await createRequest(db, owner, originalInput);
+    expect(originalReplay).toMatchObject({
+      ok: true,
+      data: {
+        id: created.data.id,
+        content: "The edited and still sufficiently detailed customer request",
+        requestType: "CHANGE",
+        priority: "URGENT",
+        version: 2,
+      },
+    });
+    expect(originalReplay).not.toHaveProperty("data.createPayloadFingerprint");
+    expect(getRequestDetail(db, owner, created.data.id)).not.toHaveProperty(
+      "data.createPayloadFingerprint",
+    );
+
+    await expect(
+      createRequest(db, owner, {
+        ...originalInput,
+        content: "The edited and still sufficiently detailed customer request",
+        requestType: "CHANGE",
+        priority: "URGENT",
+      }),
+    ).resolves.toMatchObject({ ok: false, code: "CONFLICT" });
+    await expect(
+      createRequest(db, owner, {
+        ...originalInput,
+        priority: "IMPORTANT",
+      }),
+    ).resolves.toMatchObject({ ok: false, code: "CONFLICT" });
+  });
+
+  it("fails closed when an existing request has an empty creation fingerprint", async () => {
+    const db = database();
+    const owner = insertActor(db, "owner", "CUSTOMER");
+    const project = insertProject(db, "APP");
+    assign(db, owner.id, project.id);
+    const input = {
+      projectId: project.id,
+      content: "A sufficiently detailed legacy customer request",
+      requestType: "BUG" as const,
+      priority: "NORMAL" as const,
+      idempotencyKey: "legacy-empty-fingerprint",
+    };
+    const created = await createRequest(db, owner, input);
+    if (!created.ok) throw new Error(`creation failed: ${created.code}`);
+    db.db
+      .update(requests)
+      .set({ createPayloadFingerprint: "" })
+      .where(eq(requests.id, created.data.id))
+      .run();
+
+    await expect(createRequest(db, owner, input)).resolves.toMatchObject({
+      ok: false,
+      code: "CONFLICT",
+    });
+  });
+
   it("lets only the owner edit active unscheduled content and rejects stale forms", async () => {
     const db = database();
     const owner = insertActor(db, "owner", "CUSTOMER");

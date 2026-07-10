@@ -1,0 +1,1 @@
+ALTER TABLE `requests` ADD `create_payload_fingerprint` text DEFAULT '' NOT NULL;

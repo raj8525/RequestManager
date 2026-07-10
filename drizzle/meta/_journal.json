@@ -15,6 +15,13 @@
       "when": 1783672129000,
       "tag": "0001_project-code-case-insensitive",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1783673812709,
+      "tag": "0002_request-create-payload-fingerprint",
+      "breakpoints": true
     }
   ]
 }

@@ -168,6 +168,9 @@ export const requests = sqliteTable(
       .default(false),
     version: integer("version").notNull().default(1),
     idempotencyKey: text("idempotency_key").notNull(),
+    createPayloadFingerprint: text("create_payload_fingerprint")
+      .notNull()
+      .default(""),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
       .default(nowInMilliseconds),
