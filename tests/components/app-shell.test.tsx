@@ -9,7 +9,7 @@ import { AppShell } from "@/components/app-shell";
 afterEach(cleanup);
 
 describe("AppShell", () => {
-  it("does not advertise developer management routes before their screens exist", () => {
+  it("shows developer management routes after their screens exist", () => {
     render(
       <AppShell
         actor={{
@@ -25,7 +25,7 @@ describe("AppShell", () => {
     );
 
     expect(screen.getAllByRole("link", { name: "需求列表" })).not.toHaveLength(0);
-    expect(screen.queryByRole("link", { name: "项目管理" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "账号管理" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "项目管理" })).not.toHaveLength(0);
+    expect(screen.getAllByRole("link", { name: "账号管理" })).not.toHaveLength(0);
   });
 });

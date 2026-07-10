@@ -12,7 +12,10 @@ import {
   setUserActive,
   updateUserIdentity,
 } from "@/features/accounts/service";
-import { listManageableUsers } from "@/features/accounts/queries";
+import {
+  listManageableUsers,
+  listManageableUsersWithMemberships,
+} from "@/features/accounts/queries";
 import { createTestDatabase, type TestDatabase } from "@/../tests/helpers/test-database";
 
 const NOW = new Date("2026-07-10T00:00:00.000Z");
@@ -204,6 +207,37 @@ describe("developer-managed accounts", () => {
         ]),
       );
       expect(listed.data.some((user) => "passwordHash" in user)).toBe(false);
+    }
+  });
+
+  it("returns customer memberships in the management DTO without account secrets", async () => {
+    const db = database();
+    const developer = await insertUser(db, { username: "dev", role: "DEVELOPER" });
+    const customer = await insertUser(db, { username: "alice", role: "CUSTOMER" });
+    const project = db.db
+      .insert(projects)
+      .values({ code: "ONE", name: "One", createdAt: NOW, updatedAt: NOW })
+      .returning()
+      .get();
+    db.db
+      .insert(projectMemberships)
+      .values({ customerId: customer.id, projectId: project.id })
+      .run();
+
+    const result = listManageableUsersWithMemberships(db, actorFor(developer));
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: expect.arrayContaining([
+        expect.objectContaining({
+          id: customer.id,
+          username: "alice",
+          projectIds: [project.id],
+        }),
+      ]),
+    });
+    if (result.ok) {
+      expect(result.data.some((user) => "passwordHash" in user)).toBe(false);
     }
   });
 
