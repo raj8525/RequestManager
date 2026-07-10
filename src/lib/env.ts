@@ -37,7 +37,7 @@ export function getEnvironment(
     databasePath: environment.DATABASE_PATH ?? "data/request-manager.db",
     uploadsPath: environment.UPLOADS_PATH ?? "data/uploads",
     temporaryUploadsPath: environment.TEMP_UPLOADS_PATH ?? "data/tmp",
-    appOrigin: normalizedOrigin(environment.APP_ORIGIN ?? "http://localhost:3000"),
+    appOrigin: normalizedOrigin(environment.APP_ORIGIN ?? "http://localhost:13001"),
     secureCookies:
       environment.NODE_ENV === "production" || configuredSecureCookies,
     trustProxyHeaders: booleanValue(

@@ -15,7 +15,7 @@
 | `UPLOADS_PATH` | `data/uploads` |
 | `TEMP_UPLOADS_PATH` | `data/tmp` |
 | `BACKUP_PATH` | `data/backups` |
-| `APP_ORIGIN` | `http://localhost:3000` |
+| `APP_ORIGIN` | `http://localhost:13001` |
 | `SECURE_COOKIES` | `false`，生产环境强制为安全 Cookie |
 | `TRUST_PROXY_HEADERS` | `false` |
 
