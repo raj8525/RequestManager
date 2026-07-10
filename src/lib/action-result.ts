@@ -6,6 +6,7 @@ export type ActionFailureCode =
   | "LAST_DEVELOPER"
   | "NOT_FOUND"
   | "PASSWORD_CHANGE_REQUIRED"
+  | "STATE_CONFLICT"
   | "UNAUTHENTICATED"
   | "FORBIDDEN"
   | "SYSTEM_UNAVAILABLE";

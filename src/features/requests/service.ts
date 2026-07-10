@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { ZodError, ZodType } from "zod";
 
 import {
@@ -10,6 +10,7 @@ import {
 } from "@/auth/authorization";
 import type { AuthenticatedUser } from "@/auth/session-service";
 import {
+  clarificationMessages,
   projectMemberships,
   projects,
   requestEvents,
@@ -30,6 +31,7 @@ import {
 } from "@/lib/action-result";
 import { DomainError } from "@/lib/domain-error";
 
+import { deriveNeedsCustomerReply } from "../communication/policy";
 import { requireActiveCustomerProject } from "../projects/authorization";
 import { assertValidStateCombination, canEditRequest, decidePause } from "./policy";
 import { presentRequest, type RequestDto } from "./presenter";
@@ -236,6 +238,7 @@ function updateWithEvent(
       | "priority"
       | "progressStatus"
       | "recordStatus"
+      | "needsCustomerReply"
     >
   >,
   eventType: RequestEventType,
@@ -260,6 +263,24 @@ function updateWithEvent(
 
   appendEvent(database, updated.id, actor.id, eventType, payload, now);
   return updated;
+}
+
+function lastClarificationAuthorRole(
+  database: AppDatabase,
+  requestId: number,
+): UserRole | null {
+  return (
+    database.db
+      .select({ authorRole: clarificationMessages.authorRole })
+      .from(clarificationMessages)
+      .where(eq(clarificationMessages.requestId, requestId))
+      .orderBy(
+        desc(clarificationMessages.createdAt),
+        desc(clarificationMessages.id),
+      )
+      .limit(1)
+      .get()?.authorRole ?? null
+  );
 }
 
 export async function createRequest(
@@ -520,11 +541,18 @@ async function developerRecordTransition(
     );
     assertExpectedVersion(current, parsed.data.expectedVersion);
     const target = decideTarget(current);
+    const needsCustomerReply =
+      target === "ACTIVE"
+        ? deriveNeedsCustomerReply(
+            target,
+            lastClarificationAuthorRole(database, current.id),
+          )
+        : current.needsCustomerReply;
     return updateWithEvent(
       database,
       currentActor,
       current,
-      { recordStatus: target },
+      { recordStatus: target, needsCustomerReply },
       eventType,
       { from: current.recordStatus, to: target },
     );
