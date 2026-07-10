@@ -9,6 +9,7 @@ import type {
   SetUserActiveInput,
   UpdateUserIdentityInput,
 } from "@/features/accounts/schemas";
+import { userRoleSchema } from "@/features/accounts/schemas";
 import {
   createUser,
   replaceCustomerMemberships,
@@ -36,11 +37,17 @@ function formString(formData: FormData, name: string): string {
 export async function createUserRuntimeAction(formData: FormData) {
   const { actor, database } = await actorAndDatabase();
   if (!actor) return actionFailure("UNAUTHENTICATED", "登录已过期，请重新登录");
+  const role = userRoleSchema.safeParse(formString(formData, "role"));
+  if (!role.success) {
+    return actionFailure("INVALID_INPUT", "账号类型无效", {
+      role: ["请选择有效的账号类型"],
+    });
+  }
   const result = await createUser(database, actor, {
     username: formString(formData, "username"),
     displayName: formString(formData, "displayName"),
     password: formString(formData, "password"),
-    role: formString(formData, "role") === "DEVELOPER" ? "DEVELOPER" : "CUSTOMER",
+    role: role.data,
   });
   if (result.ok) refreshAccounts();
   return result;

@@ -23,6 +23,9 @@ import {
   revokeUserSessions,
 } from "@/auth/session-service";
 import {
+  LOGIN_SOURCE_ATTEMPT_LIMIT,
+  LOGIN_THROTTLE_MAX_ROWS,
+  LOGIN_THROTTLE_SOURCE_KEY,
   isLoginThrottled,
   reserveLoginAttempt,
 } from "@/auth/throttle";
@@ -228,7 +231,13 @@ describe("database-backed sessions", () => {
     expect(
       reserveLoginAttempt(db, "ALICE", "203.0.113.10", NOW),
     ).toBe(false);
-    expect(db.db.select().from(authThrottle).get()).toMatchObject({
+    expect(
+      db.db
+        .select()
+        .from(authThrottle)
+        .where(eq(authThrottle.normalizedUsername, "alice"))
+        .get(),
+    ).toMatchObject({
       normalizedUsername: "alice",
       failureCount: 5,
     });
@@ -248,7 +257,56 @@ describe("database-backed sessions", () => {
         new Date(NOW.getTime() + 15 * 60 * 1_000),
       ),
     ).toBe(true);
-    expect(db.db.select().from(authThrottle).get()?.failureCount).toBe(1);
+    expect(
+      db.db
+        .select()
+        .from(authThrottle)
+        .where(eq(authThrottle.normalizedUsername, "alice"))
+        .get()?.failureCount,
+    ).toBe(1);
+  });
+
+  it("limits rotating usernames by source and prunes expired throttle rows", () => {
+    const db = database();
+    const source = "203.0.113.50";
+
+    for (let attempt = 0; attempt < LOGIN_SOURCE_ATTEMPT_LIMIT; attempt += 1) {
+      expect(reserveLoginAttempt(db, `user-${attempt}`, source, NOW)).toBe(true);
+    }
+    expect(reserveLoginAttempt(db, "one-more-user", source, NOW)).toBe(false);
+    expect(db.db.select().from(authThrottle).all()).toHaveLength(
+      LOGIN_SOURCE_ATTEMPT_LIMIT + 1,
+    );
+
+    const nextWindow = new Date(NOW.getTime() + 15 * 60 * 1_000);
+    expect(reserveLoginAttempt(db, "fresh-user", source, nextWindow)).toBe(true);
+    expect(db.db.select().from(authThrottle).all()).toHaveLength(2);
+  });
+
+  it("fails closed when the global throttle row cap is reached", () => {
+    const db = database();
+    db.sqlite
+      .prepare(
+        `with recursive counter(value) as (
+          values(1)
+          union all
+          select value + 1 from counter where value < ?
+        )
+        insert into auth_throttle (
+          normalized_username,
+          source_hash,
+          failure_count,
+          window_started_at,
+          updated_at
+        )
+        select 'seed-' || value, 'source-' || value, 1, ?, ? from counter`,
+      )
+      .run(LOGIN_THROTTLE_MAX_ROWS, NOW.getTime(), NOW.getTime());
+
+    expect(reserveLoginAttempt(db, "new-user", "new-source", NOW)).toBe(false);
+    expect(db.db.select().from(authThrottle).all()).toHaveLength(
+      LOGIN_THROTTLE_MAX_ROWS,
+    );
   });
 
   it("uses one public error for unknown, invalid and throttled logins", async () => {
@@ -286,6 +344,27 @@ describe("database-backed sessions", () => {
         message: GENERIC_LOGIN_ERROR,
       });
     }
+  });
+
+  it("rejects malformed or oversized login credentials before persistence", async () => {
+    const db = database();
+    await insertUser(db);
+    const context = actionContext();
+    const attempts = [
+      { username: "ab", password: "initial password" },
+      { username: "bad name", password: "initial password" },
+      { username: "a".repeat(33), password: "initial password" },
+      { username: "alice", password: "x".repeat(129) },
+    ];
+
+    for (const attempt of attempts) {
+      await expect(loginAction(db, attempt, context)).resolves.toMatchObject({
+        ok: false,
+        code: "INVALID_CREDENTIALS",
+        message: GENERIC_LOGIN_ERROR,
+      });
+    }
+    expect(db.db.select().from(authThrottle).all()).toEqual([]);
   });
 
   it("uses one fail-closed source bucket when proxy headers are not trusted", async () => {
@@ -376,7 +455,20 @@ describe("database-backed sessions", () => {
       },
     });
     expect(getSessionUser(db, cookies.writes[0].value, NOW)?.id).toBe(user.id);
-    expect(db.db.select().from(authThrottle).all()).toHaveLength(0);
+    expect(
+      db.db
+        .select()
+        .from(authThrottle)
+        .where(eq(authThrottle.normalizedUsername, "alice"))
+        .all(),
+    ).toHaveLength(0);
+    expect(
+      db.db
+        .select()
+        .from(authThrottle)
+        .where(eq(authThrottle.normalizedUsername, LOGIN_THROTTLE_SOURCE_KEY))
+        .all(),
+    ).toHaveLength(1);
 
     const logoutResult = await logoutAction(db, context);
     expect(logoutResult).toMatchObject({ ok: true });
@@ -413,4 +505,32 @@ describe("database-backed sessions", () => {
       verifyPassword("new secure password", updated!.passwordHash),
     ).resolves.toBe(true);
   });
+
+  it.each([
+    { length: 9, accepted: false },
+    { length: 10, accepted: true },
+    { length: 128, accepted: true },
+    { length: 129, accepted: false },
+  ])(
+    "enforces the $length-character own-password boundary",
+    async ({ length, accepted }) => {
+      const db = database();
+      const user = await insertUser(db);
+      const session = createSession(db, user.id, NOW);
+      const cookies = new TestCookies();
+      cookies.values.set("request_manager_session", session.token);
+
+      const result = await changeOwnPasswordAction(
+        db,
+        { oldPassword: "initial password", newPassword: "x".repeat(length) },
+        actionContext(cookies, { redirect: vi.fn() }),
+      );
+
+      expect(result.ok).toBe(accepted);
+      if (!accepted) {
+        expect(result).toMatchObject({ ok: false, code: "INVALID_INPUT" });
+        expect(getSessionUser(db, session.token, NOW)?.id).toBe(user.id);
+      }
+    },
+  );
 });

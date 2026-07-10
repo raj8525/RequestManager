@@ -1,23 +1,22 @@
 import { z } from "zod";
 
-export const usernameSchema = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .min(3, "用户名至少需要 3 个字符")
-  .max(32, "用户名最多允许 32 个字符")
-  .regex(/^[a-z0-9._-]+$/, "用户名只能包含 ASCII 字母、数字、点、下划线和连字符");
+import {
+  passwordSchema,
+  usernameSchema,
+} from "@/auth/credential-policy";
+
+export { passwordSchema, usernameSchema } from "@/auth/credential-policy";
 
 const displayNameSchema = z.string().trim().min(1, "显示名不能为空");
-const passwordSchema = z.string().min(1, "密码不能为空");
 const userIdSchema = z.number().int().positive();
+export const userRoleSchema = z.enum(["CUSTOMER", "DEVELOPER"]);
 
 export const createUserSchema = z
   .object({
     username: usernameSchema,
     displayName: displayNameSchema,
     password: passwordSchema,
-    role: z.enum(["CUSTOMER", "DEVELOPER"]),
+    role: userRoleSchema,
   })
   .strict();
 

@@ -92,6 +92,28 @@ describe("management runtime actions", () => {
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/manage/users");
   });
 
+  it.each([undefined, "developer", "ADMIN"])(
+    "fails closed for the invalid account role %s",
+    async (role) => {
+      const { createUserRuntimeAction } = await import(
+        "@/features/accounts/runtime-actions"
+      );
+      const formData = new FormData();
+      formData.set("username", "customer");
+      formData.set("displayName", "王客户");
+      formData.set("password", "temporary password");
+      if (role !== undefined) formData.set("role", role);
+
+      await expect(createUserRuntimeAction(formData)).resolves.toMatchObject({
+        ok: false,
+        code: "INVALID_INPUT",
+        fieldErrors: { role: expect.any(Array) },
+      });
+      expect(mocks.createUser).not.toHaveBeenCalled();
+      expect(mocks.revalidatePath).not.toHaveBeenCalled();
+    },
+  );
+
   it("refreshes project-dependent pages only after a successful project command", async () => {
     const { createProjectRuntimeAction } = await import(
       "@/features/projects/runtime-actions"

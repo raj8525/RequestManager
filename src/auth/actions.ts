@@ -1,7 +1,12 @@
-import { sql } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import { cookies, headers } from "next/headers";
 import { redirect as nextRedirect } from "next/navigation";
 
+import {
+  loginCredentialsSchema,
+  loginPasswordSchema,
+  passwordSchema,
+} from "@/auth/credential-policy";
 import {
   SESSION_COOKIE_NAME,
   clearSessionCookie,
@@ -12,14 +17,14 @@ import { hashPassword, verifyPassword } from "@/auth/password";
 import {
   createSession,
   getSessionUser,
+  hashSessionToken,
   revokeUserSessions,
 } from "@/auth/session-service";
 import {
   clearLoginFailures,
-  normalizeUsername,
   reserveLoginAttempt,
 } from "@/auth/throttle";
-import { users } from "@/db/schema";
+import { sessions, users } from "@/db/schema";
 import type { AppDatabase } from "@/db/types";
 import {
   actionFailure,
@@ -104,8 +109,14 @@ export async function loginAction(
   const resolved = await resolveContext(context);
   assertSameOrigin(resolved.headers, resolved.appOrigin);
 
-  const username = normalizeUsername(inputValue(input, "username"));
-  const password = inputValue(input, "password");
+  const credentials = loginCredentialsSchema.safeParse({
+    username: inputValue(input, "username"),
+    password: inputValue(input, "password"),
+  });
+  if (!credentials.success) {
+    return actionFailure("INVALID_CREDENTIALS", GENERIC_LOGIN_ERROR);
+  }
+  const { username, password } = credentials.data;
   if (!reserveLoginAttempt(database, username, resolved.source, resolved.now)) {
     return actionFailure("INVALID_CREDENTIALS", GENERIC_LOGIN_ERROR);
   }
@@ -159,35 +170,70 @@ export async function changeOwnPasswordAction(
   assertSameOrigin(resolved.headers, resolved.appOrigin);
 
   const token = resolved.cookies.get(SESSION_COOKIE_NAME)?.value;
-  const actor = token ? getSessionUser(database, token, resolved.now) : null;
+  if (!token) return actionFailure("UNAUTHENTICATED", "登录已过期，请重新登录");
+  const actor = getSessionUser(database, token, resolved.now);
   if (!actor) return actionFailure("UNAUTHENTICATED", "登录已过期，请重新登录");
 
   const oldPassword = inputValue(input, "oldPassword");
   const newPassword = inputValue(input, "newPassword");
-  if (!newPassword) {
-    return actionFailure("INVALID_INPUT", "请输入新密码", {
-      newPassword: ["请输入新密码"],
+  const parsedNewPassword = passwordSchema.safeParse(newPassword);
+  if (!parsedNewPassword.success) {
+    return actionFailure("INVALID_INPUT", "新密码不符合要求", {
+      newPassword: parsedNewPassword.error.issues.map((issue) => issue.message),
     });
   }
+  if (!loginPasswordSchema.safeParse(oldPassword).success) {
+    return actionFailure("INVALID_CURRENT_PASSWORD", "当前密码错误");
+  }
 
-  const user = database.db.select().from(users).where(sql`${users.id} = ${actor.id}`).get();
+  const user = database.db.select().from(users).where(eq(users.id, actor.id)).get();
   if (!user || !(await verifyPassword(oldPassword, user.passwordHash))) {
     return actionFailure("INVALID_CURRENT_PASSWORD", "当前密码错误");
   }
 
-  const passwordHash = await hashPassword(newPassword);
-  database.sqlite.transaction(() => {
-    database.db
+  const expectedPasswordHash = user.passwordHash;
+  const passwordHash = await hashPassword(parsedNewPassword.data);
+  const committed = database.sqlite.transaction(() => {
+    const current = database.db
+      .select({ id: users.id })
+      .from(users)
+      .innerJoin(sessions, eq(sessions.userId, users.id))
+      .where(
+        and(
+          eq(users.id, actor.id),
+          eq(users.isActive, true),
+          eq(users.passwordHash, expectedPasswordHash),
+          eq(sessions.tokenHash, hashSessionToken(token)),
+          gt(sessions.expiresAt, resolved.now),
+        ),
+      )
+      .get();
+    if (!current) return false;
+
+    const updated = database.db
       .update(users)
       .set({
         passwordHash,
         mustChangePassword: false,
         updatedAt: resolved.now,
       })
-      .where(sql`${users.id} = ${actor.id}`)
+      .where(
+        and(
+          eq(users.id, actor.id),
+          eq(users.isActive, true),
+          eq(users.passwordHash, expectedPasswordHash),
+        ),
+      )
       .run();
+    if (updated.changes !== 1) return false;
     revokeUserSessions(database, actor.id);
-  })();
+    return true;
+  }).immediate();
+
+  if (!committed) {
+    clearSessionCookie(resolved.cookies, resolved.secureCookies);
+    return actionFailure("CONFLICT", "账号状态已变化，请重新登录后再试");
+  }
 
   clearSessionCookie(resolved.cookies, resolved.secureCookies);
   const result = actionSuccess({ redirectTo: "/login" as const });

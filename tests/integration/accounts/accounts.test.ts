@@ -144,6 +144,37 @@ describe("developer-managed accounts", () => {
     });
   });
 
+  it("enforces the shared 10-128 character password policy on create and reset", async () => {
+    const db = database();
+    const developer = await insertUser(db, { username: "dev", role: "DEVELOPER" });
+    const customer = await insertUser(db, { username: "alice", role: "CUSTOMER" });
+
+    for (const { length, accepted } of [
+      { length: 9, accepted: false },
+      { length: 10, accepted: true },
+      { length: 128, accepted: true },
+      { length: 129, accepted: false },
+    ]) {
+      const created = await createUser(db, actorFor(developer), {
+        username: `created-${length}`,
+        displayName: `Created ${length}`,
+        password: "x".repeat(length),
+        role: "CUSTOMER",
+      });
+      expect(created.ok, `create length ${length}`).toBe(accepted);
+
+      const reset = await resetUserPassword(db, actorFor(developer), {
+        userId: customer.id,
+        password: "y".repeat(length),
+      });
+      expect(reset.ok, `reset length ${length}`).toBe(accepted);
+      if (!accepted) {
+        expect(created).toMatchObject({ ok: false, code: "INVALID_INPUT" });
+        expect(reset).toMatchObject({ ok: false, code: "INVALID_INPUT" });
+      }
+    }
+  });
+
   it("resets a password with a fresh hash, forces password change and revokes all sessions", async () => {
     const db = database();
     const developer = await insertUser(db, { username: "dev", role: "DEVELOPER" });
