@@ -1,4 +1,5 @@
 export type ActionFailureCode =
+  | "ATTACHMENT_INVALID"
   | "CONFLICT"
   | "INVALID_CREDENTIALS"
   | "INVALID_CURRENT_PASSWORD"
