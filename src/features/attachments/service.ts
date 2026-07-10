@@ -437,11 +437,11 @@ function requireEditableRequest(
   if (!projectAccess.isActive) {
     throw new DomainError("FORBIDDEN", "停用项目中的需求为只读");
   }
-  if (request.version !== expectedVersion) {
-    throw new DomainError("CONFLICT", "需求已更新，请刷新后重试");
-  }
   if (!canEditRequest(actor, request)) {
     throw new DomainError("FORBIDDEN", "当前需求不可编辑");
+  }
+  if (request.version !== expectedVersion) {
+    throw new DomainError("CONFLICT", "需求已更新，请刷新后重试");
   }
   return request;
 }

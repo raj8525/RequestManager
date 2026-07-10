@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -118,6 +120,12 @@ describe("protected attachment pipeline", () => {
     };
   }
 
+  function externalDirectory(): string {
+    const root = mkdtempSync(join(tmpdir(), "request-manager-external-files-"));
+    cleanups.push(() => rmSync(root, { recursive: true, force: true }));
+    return root;
+  }
+
   it("stages by random name, hashes content and atomically commits below uploads", async () => {
     const paths = storage();
     const file = pngFile("../../public/evil.png");
@@ -168,6 +176,46 @@ describe("protected attachment pipeline", () => {
       stageAttachments([pngFile("good.png"), invalid], paths),
     ).rejects.toMatchObject({ code: "ATTACHMENT_INVALID" });
     expect(allFiles(paths.temporaryUploadsPath)).toHaveLength(0);
+  });
+
+  it("fails closed when the temporary upload root is a symbolic link", async () => {
+    const paths = storage();
+    const external = externalDirectory();
+    symlinkSync(external, paths.temporaryUploadsPath, "dir");
+
+    await expect(stageAttachments([pngFile()], paths)).rejects.toMatchObject({
+      code: "ATTACHMENT_INVALID",
+    });
+    expect(allFiles(external)).toHaveLength(0);
+  });
+
+  it("fails closed when the committed upload root is a symbolic link", async () => {
+    const paths = storage();
+    const external = externalDirectory();
+    const staged = await stageAttachments([pngFile()], paths);
+    symlinkSync(external, paths.uploadsPath, "dir");
+
+    expect(() => commitStagedAttachments(staged, paths)).toThrow(
+      expect.objectContaining({ code: "ATTACHMENT_INVALID" }),
+    );
+    expect(allFiles(external)).toHaveLength(0);
+  });
+
+  it("fails closed when an upload prefix directory is a symbolic link", async () => {
+    const paths = storage();
+    const external = externalDirectory();
+    const staged = await stageAttachments([pngFile()], paths);
+    mkdirSync(paths.uploadsPath, { recursive: true });
+    symlinkSync(
+      external,
+      join(paths.uploadsPath, staged[0]!.storageName.slice(0, 2)),
+      "dir",
+    );
+
+    expect(() => commitStagedAttachments(staged, paths)).toThrow(
+      expect.objectContaining({ code: "ATTACHMENT_INVALID" }),
+    );
+    expect(allFiles(external)).toHaveLength(0);
   });
 
   it("can explicitly discard staged files without touching committed storage", async () => {
@@ -458,11 +506,13 @@ describe("protected attachment pipeline", () => {
     const db = database();
     const paths = storage();
     const owner = insertActor(db, "owner", "CUSTOMER");
+    const peer = insertActor(db, "peer", "CUSTOMER");
     const outsider = insertActor(db, "outsider", "CUSTOMER");
     const developer = insertActor(db, "developer", "DEVELOPER");
     const project = insertProject(db, "APP");
     const otherProject = insertProject(db, "OTHER");
     assign(db, owner.id, project.id);
+    assign(db, peer.id, project.id);
     assign(db, outsider.id, otherProject.id);
     const created = await createRequestWithAttachments(
       db,
@@ -491,6 +541,18 @@ describe("protected attachment pipeline", () => {
     await expect(
       editRequestWithAttachments(db, owner, edit, [jpegFile()], paths),
     ).resolves.toMatchObject({ ok: false, code: "CONFLICT" });
+    await expect(
+      editRequestWithAttachments(db, peer, edit, [jpegFile()], paths),
+    ).resolves.toMatchObject({ ok: false, code: "FORBIDDEN" });
+    await expect(
+      editRequestWithAttachments(
+        db,
+        peer,
+        { ...edit, expectedVersion: 1 },
+        [jpegFile()],
+        paths,
+      ),
+    ).resolves.toMatchObject({ ok: false, code: "FORBIDDEN" });
     await expect(
       editRequestWithAttachments(
         db,

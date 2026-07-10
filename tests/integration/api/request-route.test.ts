@@ -1,4 +1,9 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import {
+  mkdtempSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -10,6 +15,7 @@ import { createPutHandler } from "@/app/api/requests/[requestId]/route";
 import { createPostHandler } from "@/app/api/requests/route";
 import type { AuthenticatedUser } from "@/auth/session-service";
 import {
+  attachments,
   projectMemberships,
   projects,
   users,
@@ -24,6 +30,7 @@ import { fakePngSvg, pngFile, webpFile } from "@/../tests/fixtures/images";
 
 const APP_ORIGIN = "https://requests.example.test";
 const NOW = new Date("2026-07-10T00:00:00.000Z");
+const MAX_MULTIPART_REQUEST_BYTES = 32 * 1024 * 1024;
 
 function insertActor(
   database: TestDatabase,
@@ -95,6 +102,63 @@ function multipartRequest(path: string, method: "POST" | "PUT", body: FormData) 
   });
 }
 
+function rawMultipartBytes(fields: ReadonlyArray<readonly [string, string]>): {
+  boundary: string;
+  bytes: Uint8Array;
+} {
+  const boundary = "request-manager-test-boundary";
+  const body = fields
+    .map(
+      ([name, value]) =>
+        `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`,
+    )
+    .join("") + `--${boundary}--\r\n`;
+  return { boundary, bytes: new TextEncoder().encode(body) };
+}
+
+function streamingMultipartRequest(
+  path: string,
+  method: "POST" | "PUT",
+  boundary: string,
+  chunks: readonly Uint8Array[],
+  extraHeaders: Record<string, string> = {},
+): {
+  request: Request;
+  pulls: () => number;
+  cancelled: () => boolean;
+} {
+  let chunkIndex = 0;
+  let pullCount = 0;
+  let wasCancelled = false;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      pullCount += 1;
+      const chunk = chunks[chunkIndex];
+      chunkIndex += 1;
+      if (chunk) controller.enqueue(chunk);
+      if (chunkIndex >= chunks.length) controller.close();
+    },
+    cancel() {
+      wasCancelled = true;
+    },
+  });
+  const request = new Request(`${APP_ORIGIN}${path}`, {
+    method,
+    headers: {
+      origin: APP_ORIGIN,
+      "content-type": `multipart/form-data; boundary=${boundary}`,
+      ...extraHeaders,
+    },
+    body,
+    duplex: "half",
+  } as RequestInit & { duplex: "half" });
+  return {
+    request,
+    pulls: () => pullCount,
+    cancelled: () => wasCancelled,
+  };
+}
+
 describe("multipart request and protected attachment routes", () => {
   const cleanups: Array<() => void> = [];
 
@@ -116,6 +180,12 @@ describe("multipart request and protected attachment routes", () => {
       uploadsPath: join(root, "uploads"),
       temporaryUploadsPath: join(root, "tmp"),
     };
+  }
+
+  function externalDirectory(): string {
+    const root = mkdtempSync(join(tmpdir(), "request-manager-route-external-"));
+    cleanups.push(() => rmSync(root, { recursive: true, force: true }));
+    return root;
   }
 
   it("accepts same-origin authenticated multipart creation and returns stable JSON", async () => {
@@ -144,6 +214,189 @@ describe("multipart request and protected attachment routes", () => {
         attachments: [{ mimeType: "image/png" }],
       },
     });
+  });
+
+  it("rejects an oversized declared POST body before reading its stream", async () => {
+    const db = database();
+    const paths = storage();
+    const owner = insertActor(db, "owner", "CUSTOMER");
+    const project = insertProject(db, "APP");
+    assign(db, owner.id, project.id);
+    const handler = createPostHandler({
+      database: db,
+      storagePaths: paths,
+      appOrigin: APP_ORIGIN,
+      resolveActor: async () => owner,
+    });
+    const multipart = rawMultipartBytes([
+      ["projectId", String(project.id)],
+      ["content", "A sufficiently detailed declared-length request"],
+      ["requestType", "BUG"],
+      ["priority", "NORMAL"],
+      ["idempotencyKey", "declared-post-limit"],
+    ]);
+    const streamed = streamingMultipartRequest(
+      "/api/requests",
+      "POST",
+      multipart.boundary,
+      [multipart.bytes, multipart.bytes],
+      {
+        "content-length": String(MAX_MULTIPART_REQUEST_BYTES + 1),
+      },
+    );
+
+    const response = await handler(streamed.request);
+
+    expect(response.status).toBe(413);
+    expect(streamed.cancelled()).toBe(true);
+    expect(streamed.pulls()).toBeLessThan(2);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      code: "ATTACHMENT_INVALID",
+      fieldErrors: { attachments: expect.any(Array) },
+    });
+  });
+
+  it("rejects an oversized declared PUT body before reading its stream", async () => {
+    const db = database();
+    const paths = storage();
+    const owner = insertActor(db, "owner", "CUSTOMER");
+    const project = insertProject(db, "APP");
+    assign(db, owner.id, project.id);
+    const created = await createRequestWithAttachments(
+      db,
+      owner,
+      {
+        projectId: project.id,
+        content: "A request created before the declared-length edit",
+        requestType: "BUG",
+        priority: "NORMAL",
+        idempotencyKey: "declared-put-fixture",
+      },
+      [],
+      paths,
+    );
+    if (!created.ok) throw new Error(`creation failed: ${created.code}`);
+    const handler = createPutHandler({
+      database: db,
+      storagePaths: paths,
+      appOrigin: APP_ORIGIN,
+      resolveActor: async () => owner,
+    });
+    const multipart = rawMultipartBytes([
+      ["expectedVersion", String(created.data.version)],
+      ["content", "A sufficiently detailed declared-length edit"],
+      ["requestType", "CHANGE"],
+      ["priority", "IMPORTANT"],
+    ]);
+    const streamed = streamingMultipartRequest(
+      `/api/requests/${created.data.requestNumber}`,
+      "PUT",
+      multipart.boundary,
+      [multipart.bytes, multipart.bytes],
+      {
+        "content-length": String(MAX_MULTIPART_REQUEST_BYTES + 1),
+      },
+    );
+
+    const response = await handler(streamed.request, {
+      params: Promise.resolve({ requestId: created.data.requestNumber }),
+    });
+
+    expect(response.status).toBe(413);
+    expect(streamed.cancelled()).toBe(true);
+    expect(streamed.pulls()).toBeLessThan(2);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      code: "ATTACHMENT_INVALID",
+    });
+  });
+
+  it.each([
+    ["chunked body", { "transfer-encoding": "chunked" }],
+    ["falsely small Content-Length", { "content-length": "1" }],
+  ])("aborts a %s when its actual bytes exceed the limit", async (_case, headers) => {
+    const db = database();
+    const paths = storage();
+    const owner = insertActor(db, "owner", "CUSTOMER");
+    const project = insertProject(db, "APP");
+    assign(db, owner.id, project.id);
+    const handler = createPostHandler({
+      database: db,
+      storagePaths: paths,
+      appOrigin: APP_ORIGIN,
+      resolveActor: async () => owner,
+    });
+    const chunk = new Uint8Array(8 * 1024 * 1024);
+    const streamed = streamingMultipartRequest(
+      "/api/requests",
+      "POST",
+      "oversized-stream",
+      [chunk, chunk, chunk, chunk, chunk, chunk],
+      headers,
+    );
+
+    const response = await handler(streamed.request);
+
+    expect(response.status).toBe(413);
+    expect(streamed.cancelled()).toBe(true);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      code: "ATTACHMENT_INVALID",
+    });
+  });
+
+  it("limits the total number of multipart fields and files using a bounded copy", async () => {
+    const db = database();
+    const paths = storage();
+    const owner = insertActor(db, "owner", "CUSTOMER");
+    const project = insertProject(db, "APP");
+    assign(db, owner.id, project.id);
+    const handler = createPostHandler({
+      database: db,
+      storagePaths: paths,
+      appOrigin: APP_ORIGIN,
+      resolveActor: async () => owner,
+    });
+    const form = createForm(project.id, pngFile(), "too-many-parts");
+    for (let index = 0; index < 27; index += 1) {
+      form.append("extra", String(index));
+    }
+    const request = multipartRequest("/api/requests", "POST", form);
+    const formDataParser = vi.spyOn(Request.prototype, "formData");
+
+    const response = await handler(request);
+
+    expect(response.status).toBe(413);
+    expect(formDataParser).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      code: "ATTACHMENT_INVALID",
+    });
+  });
+
+  it("allows exactly 32 multipart parts without counting the closing boundary", async () => {
+    const db = database();
+    const paths = storage();
+    const owner = insertActor(db, "owner", "CUSTOMER");
+    const project = insertProject(db, "APP");
+    assign(db, owner.id, project.id);
+    const handler = createPostHandler({
+      database: db,
+      storagePaths: paths,
+      appOrigin: APP_ORIGIN,
+      resolveActor: async () => owner,
+    });
+    const form = createForm(project.id, pngFile(), "maximum-parts");
+    for (let index = 0; index < 26; index += 1) {
+      form.append("extra", String(index));
+    }
+
+    const response = await handler(
+      multipartRequest("/api/requests", "POST", form),
+    );
+
+    expect(response.status).toBe(201);
   });
 
   it("rejects cross-origin, logged-out and spoofed image submissions", async () => {
@@ -373,5 +626,89 @@ describe("multipart request and protected attachment routes", () => {
     );
     expect(revoked.status).toBe(404);
     expect(resolveActor).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not read through a symbolic-link upload root", async () => {
+    const db = database();
+    const paths = storage();
+    const owner = insertActor(db, "owner", "CUSTOMER");
+    const project = insertProject(db, "APP");
+    assign(db, owner.id, project.id);
+    const created = await createRequestWithAttachments(
+      db,
+      owner,
+      {
+        projectId: project.id,
+        content: "A request whose upload root must not be redirected",
+        requestType: "BUG",
+        priority: "NORMAL",
+        idempotencyKey: "symlink-root-read",
+      },
+      [pngFile()],
+      paths,
+    );
+    if (!created.ok) throw new Error(`creation failed: ${created.code}`);
+    const attachmentId = created.data.attachments[0]!.id;
+    const outsideParent = externalDirectory();
+    const outsideUploads = join(outsideParent, "uploads");
+    renameSync(paths.uploadsPath, outsideUploads);
+    symlinkSync(outsideUploads, paths.uploadsPath, "dir");
+    const handler = createGetHandler({
+      database: db,
+      storagePaths: paths,
+      resolveActor: async () => owner,
+    });
+
+    const response = await handler(
+      new Request(`${APP_ORIGIN}/api/attachments/${attachmentId}`),
+      { params: Promise.resolve({ attachmentId: String(attachmentId) }) },
+    );
+
+    expect(response.status).toBe(404);
+  });
+
+  it("does not read through a symbolic-link upload prefix", async () => {
+    const db = database();
+    const paths = storage();
+    const owner = insertActor(db, "owner", "CUSTOMER");
+    const project = insertProject(db, "APP");
+    assign(db, owner.id, project.id);
+    const created = await createRequestWithAttachments(
+      db,
+      owner,
+      {
+        projectId: project.id,
+        content: "A request whose upload prefix must not be redirected",
+        requestType: "BUG",
+        priority: "NORMAL",
+        idempotencyKey: "symlink-prefix-read",
+      },
+      [pngFile()],
+      paths,
+    );
+    if (!created.ok) throw new Error(`creation failed: ${created.code}`);
+    const attachmentId = created.data.attachments[0]!.id;
+    const storageName = db.db
+      .select({ storageName: attachments.storageName })
+      .from(attachments)
+      .where(eq(attachments.id, attachmentId))
+      .get()!.storageName;
+    const prefixPath = join(paths.uploadsPath, storageName.slice(0, 2));
+    const outsideParent = externalDirectory();
+    const outsidePrefix = join(outsideParent, "prefix");
+    renameSync(prefixPath, outsidePrefix);
+    symlinkSync(outsidePrefix, prefixPath, "dir");
+    const handler = createGetHandler({
+      database: db,
+      storagePaths: paths,
+      resolveActor: async () => owner,
+    });
+
+    const response = await handler(
+      new Request(`${APP_ORIGIN}/api/attachments/${attachmentId}`),
+      { params: Promise.resolve({ attachmentId: String(attachmentId) }) },
+    );
+
+    expect(response.status).toBe(404);
   });
 });

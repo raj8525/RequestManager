@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import {
+  constants,
+  closeSync,
+  lstatSync,
   mkdirSync,
+  openSync,
   renameSync,
   rmSync,
   writeFileSync,
@@ -55,11 +59,69 @@ function assertStorageName(storageName: string): void {
   }
 }
 
+function invalidStorageDirectory(): DomainError {
+  return new DomainError("ATTACHMENT_INVALID", "附件存储目录无效", {
+    attachments: ["附件存储目录无效"],
+  });
+}
+
+function assertSafeDirectory(path: string): boolean {
+  try {
+    const stats = lstatSync(path);
+    if (stats.isSymbolicLink() || !stats.isDirectory()) {
+      throw invalidStorageDirectory();
+    }
+    return true;
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+function ensureSafeDirectory(path: string, recursive: boolean): void {
+  if (!assertSafeDirectory(path)) {
+    try {
+      mkdirSync(path, { recursive, mode: 0o700 });
+    } catch (error) {
+      if (
+        !(
+          error instanceof Error &&
+          "code" in error &&
+          error.code === "EEXIST"
+        )
+      ) {
+        throw error;
+      }
+    }
+  }
+  assertSafeDirectory(path);
+}
+
+function assertTemporaryStorageSegments(paths: StoragePaths): void {
+  assertSafeDirectory(resolve(paths.temporaryUploadsPath));
+}
+
+function assertCommittedStorageSegments(
+  storageName: string,
+  paths: StoragePaths,
+): void {
+  const uploadsPath = resolve(paths.uploadsPath);
+  assertSafeDirectory(uploadsPath);
+  assertSafeDirectory(resolve(uploadsPath, storageName.slice(0, 2)));
+}
+
 function resolveTemporaryAttachmentPath(
   storageName: string,
   paths: StoragePaths,
 ): string {
   assertStorageName(storageName);
+  assertTemporaryStorageSegments(paths);
   return resolve(paths.temporaryUploadsPath, storageName);
 }
 
@@ -68,6 +130,7 @@ export function resolveCommittedAttachmentPath(
   paths: StoragePaths,
 ): string {
   assertStorageName(storageName);
+  assertCommittedStorageSegments(storageName, paths);
   return resolve(paths.uploadsPath, storageName.slice(0, 2), storageName);
 }
 
@@ -88,10 +151,7 @@ export async function stageAttachments(
   paths: StoragePaths,
 ): Promise<StagedAttachment[]> {
   validateAttachmentLimits(files.map((file) => ({ sizeBytes: file.size })));
-  mkdirSync(resolve(paths.temporaryUploadsPath), {
-    recursive: true,
-    mode: 0o700,
-  });
+  ensureSafeDirectory(resolve(paths.temporaryUploadsPath), true);
 
   const staged: StagedAttachment[] = [];
   const allocatedNames: string[] = [];
@@ -100,11 +160,20 @@ export async function stageAttachments(
       const validated = await validateImageFile(file);
       const storageName = randomUUID();
       allocatedNames.push(storageName);
-      writeFileSync(
+      ensureSafeDirectory(resolve(paths.temporaryUploadsPath), true);
+      const descriptor = openSync(
         resolveTemporaryAttachmentPath(storageName, paths),
-        validated.bytes,
-        { flag: "wx", mode: 0o600 },
+        constants.O_WRONLY |
+          constants.O_CREAT |
+          constants.O_EXCL |
+          constants.O_NOFOLLOW,
+        0o600,
       );
+      try {
+        writeFileSync(descriptor, validated.bytes);
+      } finally {
+        closeSync(descriptor);
+      }
       staged.push({
         storageName,
         originalName: validated.originalName,
@@ -133,14 +202,18 @@ export function commitStagedAttachments(
         attachment.storageName,
         paths,
       );
+      const uploadsPath = resolve(paths.uploadsPath);
+      ensureSafeDirectory(uploadsPath, true);
+      ensureSafeDirectory(
+        resolve(uploadsPath, attachment.storageName.slice(0, 2)),
+        false,
+      );
       const committedPath = resolveCommittedAttachmentPath(
         attachment.storageName,
         paths,
       );
-      mkdirSync(resolve(paths.uploadsPath, attachment.storageName.slice(0, 2)), {
-        recursive: true,
-        mode: 0o700,
-      });
+      assertTemporaryStorageSegments(paths);
+      assertCommittedStorageSegments(attachment.storageName, paths);
       renameSync(temporaryPath, committedPath);
       committed.push({ ...attachment, path: committedPath });
     }

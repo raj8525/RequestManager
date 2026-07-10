@@ -12,7 +12,9 @@ import { parseRequestNumber } from "@/lib/request-number";
 import {
   actionResponse,
   attachmentFiles,
+  boundedMultipartFormData,
   formString,
+  multipartFormFailure,
   routeFailure,
   unauthenticatedFailure,
   type MultipartRequestRouteDependencies,
@@ -93,9 +95,9 @@ export function createPutHandler(
 
     let form: FormData;
     try {
-      form = await request.formData();
-    } catch {
-      return routeFailure("INVALID_INPUT", "提交的信息无效");
+      form = await boundedMultipartFormData(request);
+    } catch (error) {
+      return multipartFormFailure(error);
     }
     const files = attachmentFiles(form);
     const retainedIds = retainedAttachmentIds(form);
