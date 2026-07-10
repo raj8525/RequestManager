@@ -91,6 +91,26 @@ describe("createDatabase", () => {
     ).toThrow();
   });
 
+  it("enforces case-insensitive project-code uniqueness", () => {
+    const testDb = createTestDatabase();
+    cleanups.push(testDb.cleanup);
+    testDb.db.insert(projects).values({ code: "APP", name: "Application" }).run();
+
+    expect(() =>
+      testDb.db
+        .insert(projects)
+        .values({ code: "app", name: "Duplicate application" })
+        .run(),
+    ).toThrow();
+
+    const index = testDb.sqlite
+      .prepare(
+        "select sql from sqlite_master where type = 'index' and name = 'projects_code_unique'",
+      )
+      .get() as { sql: string };
+    expect(index.sql).toContain('lower("code")');
+  });
+
   it("finds migrations independently of the current working directory", () => {
     const directory = mkdtempSync(join(tmpdir(), "request-manager-cwd-test-"));
     const database = createDatabase(join(directory, "test.db"));

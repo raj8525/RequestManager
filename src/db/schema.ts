@@ -119,7 +119,7 @@ export const projects = sqliteTable(
       .notNull()
       .default(nowInMilliseconds),
   },
-  (table) => [uniqueIndex("projects_code_unique").on(table.code)],
+  (table) => [uniqueIndex("projects_code_unique").on(sql`lower(${table.code})`)],
 );
 
 export const projectMemberships = sqliteTable(

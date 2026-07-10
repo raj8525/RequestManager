@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 
 import type { AuthenticatedUser } from "@/auth/session-service";
-import { projectMemberships, projects } from "@/db/schema";
+import { projectMemberships, projects, users } from "@/db/schema";
 import type { AppDatabase, UserRole } from "@/db/types";
 
 export class AuthorizationError extends Error {
@@ -40,6 +40,40 @@ export function requireDeveloper(
   actor: AuthenticatedUser | null | undefined,
 ): UserWithRole<"DEVELOPER"> {
   return requireRole(actor, "DEVELOPER");
+}
+
+export function requireCurrentDeveloper(
+  database: AppDatabase,
+  actor: AuthenticatedUser | null | undefined,
+): UserWithRole<"DEVELOPER"> {
+  const developer = requireDeveloper(actor);
+  const current = database.db
+    .select({
+      id: users.id,
+      username: users.username,
+      displayName: users.displayName,
+      role: users.role,
+      isActive: users.isActive,
+      mustChangePassword: users.mustChangePassword,
+    })
+    .from(users)
+    .where(eq(users.id, developer.id))
+    .get();
+
+  if (!current || !current.isActive || current.role !== "DEVELOPER") {
+    throw new AuthorizationError("FORBIDDEN");
+  }
+  if (current.mustChangePassword) {
+    throw new AuthorizationError("PASSWORD_CHANGE_REQUIRED");
+  }
+
+  return {
+    id: current.id,
+    username: current.username,
+    displayName: current.displayName,
+    role: "DEVELOPER",
+    mustChangePassword: false,
+  };
 }
 
 export function canAccessProject(

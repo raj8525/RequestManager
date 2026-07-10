@@ -237,6 +237,61 @@ describe("developer-managed accounts", () => {
     expect(canAccessProject(db, actorFor(customer), secondProject.id)).toBe(true);
   });
 
+  it("rechecks live developer authorization for every account command", async () => {
+    const db = database();
+    const developer = await insertUser(db, { username: "dev", role: "DEVELOPER" });
+    const staleActor = actorFor(developer);
+    const customer = await insertUser(db, { username: "alice", role: "CUSTOMER" });
+    const project = db.db
+      .insert(projects)
+      .values({ code: "ONE", name: "One", createdAt: NOW, updatedAt: NOW })
+      .returning()
+      .get();
+    const originalPasswordHash = customer.passwordHash;
+    db.db.update(users).set({ isActive: false }).where(eq(users.id, developer.id)).run();
+
+    const results = await Promise.all([
+      createUser(db, staleActor, {
+        username: "new-customer",
+        displayName: "New customer",
+        password: "temporary password",
+        role: "CUSTOMER",
+      }),
+      updateUserIdentity(db, staleActor, {
+        userId: customer.id,
+        username: "changed",
+        displayName: "Changed",
+      }),
+      resetUserPassword(db, staleActor, {
+        userId: customer.id,
+        password: "replacement password",
+      }),
+      setUserActive(db, staleActor, { userId: customer.id, active: false }),
+      replaceCustomerMemberships(db, staleActor, {
+        customerId: customer.id,
+        projectIds: [project.id],
+      }),
+    ]);
+
+    for (const result of results) {
+      expect(result).toMatchObject({ ok: false, code: "FORBIDDEN" });
+    }
+    expect(db.db.select().from(users).where(eq(users.id, customer.id)).get()).toMatchObject({
+      username: "alice",
+      displayName: "alice",
+      passwordHash: originalPasswordHash,
+      isActive: true,
+    });
+    expect(db.db.select().from(users).where(eq(users.username, "new-customer")).get()).toBeUndefined();
+    expect(
+      db.db
+        .select()
+        .from(projectMemberships)
+        .where(eq(projectMemberships.customerId, customer.id))
+        .all(),
+    ).toEqual([]);
+  });
+
   it("rejects inactive or non-customer membership targets and missing projects without partial writes", async () => {
     const db = database();
     const developer = await insertUser(db, { username: "dev", role: "DEVELOPER" });
@@ -249,11 +304,19 @@ describe("developer-managed accounts", () => {
       username: "other-dev",
       role: "DEVELOPER",
     });
+    const activeCustomer = await insertUser(db, {
+      username: "active",
+      role: "CUSTOMER",
+    });
     const project = db.db
       .insert(projects)
       .values({ code: "ONE", name: "One", createdAt: NOW, updatedAt: NOW })
       .returning()
       .get();
+    db.db
+      .insert(projectMemberships)
+      .values({ customerId: activeCustomer.id, projectId: project.id })
+      .run();
 
     for (const customerId of [inactiveCustomer.id, otherDeveloper.id]) {
       const result = await replaceCustomerMemberships(db, actorFor(developer), {
@@ -264,10 +327,17 @@ describe("developer-managed accounts", () => {
     }
 
     const missing = await replaceCustomerMemberships(db, actorFor(developer), {
-      customerId: inactiveCustomer.id,
+      customerId: activeCustomer.id,
       projectIds: [project.id, 999_999],
     });
-    expect(missing.ok).toBe(false);
+    expect(missing).toMatchObject({ ok: false, code: "INVALID_INPUT" });
+    expect(
+      db.db
+        .select({ customerId: projectMemberships.customerId, projectId: projectMemberships.projectId })
+        .from(projectMemberships)
+        .where(eq(projectMemberships.customerId, activeCustomer.id))
+        .all(),
+    ).toEqual([{ customerId: activeCustomer.id, projectId: project.id }]);
     expect(
       db.db
         .select()

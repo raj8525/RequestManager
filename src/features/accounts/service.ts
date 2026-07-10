@@ -1,7 +1,11 @@
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import type { ZodError, ZodType } from "zod";
 
-import { AuthorizationError, requireDeveloper } from "@/auth/authorization";
+import {
+  AuthorizationError,
+  requireCurrentDeveloper,
+  requireDeveloper,
+} from "@/auth/authorization";
 import { hashPassword } from "@/auth/password";
 import type { AuthenticatedUser } from "@/auth/session-service";
 import { revokeUserSessions } from "@/auth/session-service";
@@ -78,16 +82,42 @@ function parseInput<Output>(
   };
 }
 
+function authorizationFailure(error: unknown): ActionFailure | null {
+  if (!(error instanceof AuthorizationError)) return null;
+  return actionFailure(
+    error.code,
+    error.code === "PASSWORD_CHANGE_REQUIRED" ? "请先修改密码" : "无权执行此操作",
+  );
+}
+
 function authorize(actor: AuthenticatedUser): ActionFailure | null {
   try {
     requireDeveloper(actor);
     return null;
   } catch (error) {
-    if (!(error instanceof AuthorizationError)) throw error;
-    return actionFailure(
-      error.code,
-      error.code === "PASSWORD_CHANGE_REQUIRED" ? "请先修改密码" : "无权执行此操作",
-    );
+    const failure = authorizationFailure(error);
+    if (!failure) throw error;
+    return failure;
+  }
+}
+
+function runAuthorizedWrite<T>(
+  database: AppDatabase,
+  actor: AuthenticatedUser,
+  operation: () => T,
+): { ok: true; data: T } | { ok: false; result: ActionFailure } {
+  try {
+    const data = database.sqlite
+      .transaction(() => {
+        requireCurrentDeveloper(database, actor);
+        return operation();
+      })
+      .immediate();
+    return { ok: true, data };
+  } catch (error) {
+    const result = authorizationFailure(error);
+    if (!result) throw error;
+    return { ok: false, result };
   }
 }
 
@@ -103,7 +133,7 @@ export async function createUser(
 
   const passwordHash = await hashPassword(parsed.data.password);
   const now = new Date();
-  const outcome = database.sqlite.transaction(() => {
+  const write = runAuthorizedWrite(database, actor, () => {
     const duplicate = database.db
       .select({ id: users.id })
       .from(users)
@@ -125,7 +155,9 @@ export async function createUser(
       })
       .returning()
       .get();
-  }).immediate();
+  });
+  if (!write.ok) return write.result;
+  const outcome = write.data;
 
   return outcome
     ? actionSuccess(managedUser(outcome))
@@ -144,7 +176,7 @@ export async function updateUserIdentity(
   const parsed = parseInput(updateUserIdentitySchema, input);
   if (!parsed.ok) return parsed.result;
 
-  const outcome = database.sqlite.transaction(() => {
+  const write = runAuthorizedWrite(database, actor, () => {
     const current = database.db
       .select()
       .from(users)
@@ -177,7 +209,9 @@ export async function updateUserIdentity(
       .returning()
       .get();
     return { kind: "updated" as const, user: updated };
-  }).immediate();
+  });
+  if (!write.ok) return write.result;
+  const outcome = write.data;
 
   if (outcome.kind === "missing") return actionFailure("NOT_FOUND", "账号不存在");
   if (outcome.kind === "duplicate") {
@@ -199,7 +233,7 @@ export async function resetUserPassword(
   if (!parsed.ok) return parsed.result;
 
   const passwordHash = await hashPassword(parsed.data.password);
-  const updated = database.sqlite.transaction(() => {
+  const write = runAuthorizedWrite(database, actor, () => {
     const current = database.db
       .select()
       .from(users)
@@ -215,7 +249,9 @@ export async function resetUserPassword(
       .get();
     revokeUserSessions(database, current.id);
     return user;
-  }).immediate();
+  });
+  if (!write.ok) return write.result;
+  const updated = write.data;
 
   return updated
     ? actionSuccess(managedUser(updated))
@@ -232,7 +268,7 @@ export async function setUserActive(
   const parsed = parseInput(setUserActiveSchema, input);
   if (!parsed.ok) return parsed.result;
 
-  const outcome = database.sqlite.transaction(() => {
+  const write = runAuthorizedWrite(database, actor, () => {
     const current = database.db
       .select()
       .from(users)
@@ -259,7 +295,9 @@ export async function setUserActive(
       .get();
     if (!parsed.data.active) revokeUserSessions(database, current.id);
     return { kind: "updated" as const, user };
-  }).immediate();
+  });
+  if (!write.ok) return write.result;
+  const outcome = write.data;
 
   if (outcome.kind === "missing") return actionFailure("NOT_FOUND", "账号不存在");
   if (outcome.kind === "last-developer") {
@@ -279,7 +317,7 @@ export async function replaceCustomerMemberships(
   if (!parsed.ok) return parsed.result;
 
   const projectIds = [...new Set(parsed.data.projectIds)];
-  const outcome = database.sqlite.transaction(() => {
+  const write = runAuthorizedWrite(database, actor, () => {
     const customer = database.db
       .select({ id: users.id, role: users.role, isActive: users.isActive })
       .from(users)
@@ -313,7 +351,9 @@ export async function replaceCustomerMemberships(
         .run();
     }
     return { kind: "replaced" as const };
-  }).immediate();
+  });
+  if (!write.ok) return write.result;
+  const outcome = write.data;
 
   if (outcome.kind === "invalid-customer") {
     return actionFailure("INVALID_INPUT", "只能为启用的客户账号分配项目", {

@@ -5,6 +5,7 @@ import { canAccessProject } from "@/auth/authorization";
 import { hashPassword } from "@/auth/password";
 import { projectMemberships, projects, users } from "@/db/schema";
 import { listManageableProjects } from "@/features/projects/queries";
+import { requireActiveCustomerProject } from "@/features/projects/authorization";
 import {
   createProject,
   setProjectActive,
@@ -171,9 +172,94 @@ describe("developer-managed projects", () => {
     await setProjectActive(db, developer, { projectId: project.id, active: false });
 
     expect(canAccessProject(db, customer, project.id)).toBe(true);
+    expect(() => requireActiveCustomerProject(db, customer, project.id)).toThrowError(
+      "FORBIDDEN",
+    );
     expect(db.db.select().from(projects).where(eq(projects.id, project.id)).get()).toMatchObject({
       isActive: false,
     });
+  });
+
+  it("requires a current customer membership in an active project for new work", async () => {
+    const db = database();
+    const customer = await insertUser(db, "customer", "CUSTOMER");
+    const project = db.db
+      .insert(projects)
+      .values({ code: "APP", name: "Application", createdAt: NOW, updatedAt: NOW })
+      .returning()
+      .get();
+    db.db
+      .insert(projectMemberships)
+      .values({ customerId: customer.id, projectId: project.id })
+      .run();
+
+    expect(requireActiveCustomerProject(db, customer, project.id)).toMatchObject({
+      id: project.id,
+      isActive: true,
+    });
+
+    db.db
+      .delete(projectMemberships)
+      .where(eq(projectMemberships.customerId, customer.id))
+      .run();
+    expect(() => requireActiveCustomerProject(db, customer, project.id)).toThrowError(
+      "FORBIDDEN",
+    );
+  });
+
+  it("rechecks live developer authorization for every project command", async () => {
+    const db = database();
+    const developer = await insertUser(db, "dev", "DEVELOPER");
+    const staleActor = { ...developer, mustChangePassword: false as const };
+    const project = db.db
+      .insert(projects)
+      .values({ code: "APP", name: "Application", createdAt: NOW, updatedAt: NOW })
+      .returning()
+      .get();
+    db.db.update(users).set({ isActive: false }).where(eq(users.id, developer.id)).run();
+
+    const results = await Promise.all([
+      createProject(db, staleActor, {
+        code: "NEW",
+        name: "New project",
+        description: "",
+      }),
+      updateProject(db, staleActor, {
+        projectId: project.id,
+        code: "CHANGED",
+        name: "Changed",
+        description: "Changed",
+      }),
+      setProjectActive(db, staleActor, { projectId: project.id, active: false }),
+    ]);
+
+    for (const result of results) {
+      expect(result).toMatchObject({ ok: false, code: "FORBIDDEN" });
+    }
+    expect(db.db.select().from(projects).where(eq(projects.id, project.id)).get()).toMatchObject({
+      code: "APP",
+      name: "Application",
+      isActive: true,
+    });
+    expect(db.db.select().from(projects).where(eq(projects.code, "NEW")).get()).toBeUndefined();
+  });
+
+  it("rechecks the live forced-password state before project writes", async () => {
+    const db = database();
+    const developer = await insertUser(db, "dev", "DEVELOPER");
+    db.db
+      .update(users)
+      .set({ mustChangePassword: true })
+      .where(eq(users.id, developer.id))
+      .run();
+
+    await expect(
+      createProject(db, developer, {
+        code: "NEW",
+        name: "New project",
+        description: "",
+      }),
+    ).resolves.toMatchObject({ ok: false, code: "PASSWORD_CHANGE_REQUIRED" });
   });
 
   it("rejects customer project management queries and reports missing projects", async () => {

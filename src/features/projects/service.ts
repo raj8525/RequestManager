@@ -1,7 +1,11 @@
 import { and, eq, ne, sql } from "drizzle-orm";
 import type { ZodError, ZodType } from "zod";
 
-import { AuthorizationError, requireDeveloper } from "@/auth/authorization";
+import {
+  AuthorizationError,
+  requireCurrentDeveloper,
+  requireDeveloper,
+} from "@/auth/authorization";
 import type { AuthenticatedUser } from "@/auth/session-service";
 import { projects } from "@/db/schema";
 import type { AppDatabase, Project } from "@/db/types";
@@ -47,16 +51,42 @@ function parseInput<Output>(
   };
 }
 
+function authorizationFailure(error: unknown): ActionFailure | null {
+  if (!(error instanceof AuthorizationError)) return null;
+  return actionFailure(
+    error.code,
+    error.code === "PASSWORD_CHANGE_REQUIRED" ? "请先修改密码" : "无权执行此操作",
+  );
+}
+
 function authorize(actor: AuthenticatedUser): ActionFailure | null {
   try {
     requireDeveloper(actor);
     return null;
   } catch (error) {
-    if (!(error instanceof AuthorizationError)) throw error;
-    return actionFailure(
-      error.code,
-      error.code === "PASSWORD_CHANGE_REQUIRED" ? "请先修改密码" : "无权执行此操作",
-    );
+    const failure = authorizationFailure(error);
+    if (!failure) throw error;
+    return failure;
+  }
+}
+
+function runAuthorizedWrite<T>(
+  database: AppDatabase,
+  actor: AuthenticatedUser,
+  operation: () => T,
+): { ok: true; data: T } | { ok: false; result: ActionFailure } {
+  try {
+    const data = database.sqlite
+      .transaction(() => {
+        requireCurrentDeveloper(database, actor);
+        return operation();
+      })
+      .immediate();
+    return { ok: true, data };
+  } catch (error) {
+    const result = authorizationFailure(error);
+    if (!result) throw error;
+    return { ok: false, result };
   }
 }
 
@@ -71,7 +101,7 @@ export async function createProject(
   if (!parsed.ok) return parsed.result;
 
   const now = new Date();
-  const project = database.sqlite.transaction(() => {
+  const write = runAuthorizedWrite(database, actor, () => {
     const duplicate = database.db
       .select({ id: projects.id })
       .from(projects)
@@ -90,7 +120,9 @@ export async function createProject(
       })
       .returning()
       .get();
-  }).immediate();
+  });
+  if (!write.ok) return write.result;
+  const project = write.data;
 
   return project
     ? actionSuccess(project)
@@ -109,7 +141,7 @@ export async function updateProject(
   const parsed = parseInput(updateProjectSchema, input);
   if (!parsed.ok) return parsed.result;
 
-  const outcome = database.sqlite.transaction(() => {
+  const write = runAuthorizedWrite(database, actor, () => {
     const current = database.db
       .select()
       .from(projects)
@@ -143,7 +175,9 @@ export async function updateProject(
       .returning()
       .get();
     return { kind: "updated" as const, project };
-  }).immediate();
+  });
+  if (!write.ok) return write.result;
+  const outcome = write.data;
 
   if (outcome.kind === "missing") return actionFailure("NOT_FOUND", "项目不存在");
   if (outcome.kind === "duplicate") {
@@ -164,7 +198,7 @@ export async function setProjectActive(
   const parsed = parseInput(setProjectActiveSchema, input);
   if (!parsed.ok) return parsed.result;
 
-  const project = database.sqlite.transaction(() => {
+  const write = runAuthorizedWrite(database, actor, () => {
     const current = database.db
       .select()
       .from(projects)
@@ -177,7 +211,9 @@ export async function setProjectActive(
       .where(eq(projects.id, current.id))
       .returning()
       .get();
-  }).immediate();
+  });
+  if (!write.ok) return write.result;
+  const project = write.data;
 
   return project
     ? actionSuccess(project)
