@@ -44,6 +44,13 @@ test("runs the customer and developer request lifecycle with simple clarificatio
   const requestNumber = page.url().match(/(REQ-\d+)$/)?.[1];
   expect(requestNumber).toBeTruthy();
 
+  await page.getByRole("button", { name: "放大查看 pasted-screenshot.png" }).click();
+  const imagePreview = page.getByRole("dialog", { name: "截图预览" });
+  await expect(imagePreview.getByAltText("pasted-screenshot.png")).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/requests/${requestNumber}$`));
+  await page.keyboard.press("Escape");
+  await expect(imagePreview).toHaveCount(0);
+
   await page.getByRole("link", { name: "编辑" }).click();
   await expect(page).toHaveURL(/\/edit$/);
   await page.getByLabel("需求内容").fill(editedContent);

@@ -1236,10 +1236,20 @@ summary:focus-visible {
 }
 
 .attachment-item__preview {
+  appearance: none;
   background: var(--surface-muted);
+  border: 0;
+  cursor: zoom-in;
   display: block;
   min-width: 0;
   overflow: hidden;
+  padding: 0;
+  width: 100%;
+}
+
+.attachment-item__preview:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .attachment-item__preview img {
@@ -1278,6 +1288,79 @@ summary:focus-visible {
 
 .attachment-item__actions .icon-button {
   background: rgb(255 255 255 / 92%);
+}
+
+.attachment-lightbox {
+  align-items: center;
+  background: rgb(0 0 0 / 82%);
+  display: grid;
+  inset: 0;
+  justify-items: center;
+  padding: 24px;
+  position: fixed;
+  z-index: 120;
+}
+
+.attachment-lightbox__dialog {
+  align-items: center;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 48px;
+  max-height: 100%;
+  max-width: min(1200px, 100%);
+  position: relative;
+  width: 100%;
+}
+
+.attachment-lightbox__image {
+  grid-column: 2;
+  justify-self: center;
+  max-height: calc(100dvh - 130px);
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.attachment-lightbox__close,
+.attachment-lightbox__previous,
+.attachment-lightbox__next {
+  align-self: center;
+  background: rgb(255 255 255 / 92%);
+  color: #17211f;
+}
+
+.attachment-lightbox__close {
+  position: absolute;
+  right: 0;
+  top: -42px;
+}
+
+.attachment-lightbox__previous {
+  grid-column: 1;
+}
+
+.attachment-lightbox__next {
+  grid-column: 3;
+}
+
+.attachment-lightbox__caption {
+  align-items: center;
+  color: #ffffff;
+  display: flex;
+  gap: 12px;
+  grid-column: 1 / -1;
+  justify-content: center;
+  margin: 12px 0 0;
+  min-width: 0;
+}
+
+.attachment-lightbox__caption span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-lightbox__caption small {
+  color: rgb(255 255 255 / 78%);
+  flex: 0 0 auto;
 }
 
 .message-list {
@@ -1738,6 +1821,18 @@ summary:focus-visible {
 
   .attachment-gallery {
     grid-template-columns: 1fr;
+  }
+
+  .attachment-lightbox {
+    padding: 12px;
+  }
+
+  .attachment-lightbox__dialog {
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
+  }
+
+  .attachment-lightbox__image {
+    max-height: calc(100dvh - 102px);
   }
 
   .attention-banner {
