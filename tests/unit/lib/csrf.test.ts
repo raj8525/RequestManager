@@ -25,6 +25,17 @@ describe("assertSameOrigin", () => {
     ).not.toThrow();
   });
 
+  it("accepts any LAN IP on the configured application port", () => {
+    const request = new Headers({
+      host: "localhost:13001",
+      origin: "http://10.0.0.42:13001",
+    });
+
+    expect(() =>
+      assertSameOrigin(request, "http://localhost:13001"),
+    ).not.toThrow();
+  });
+
   it("rejects a different origin host", () => {
     const request = new Headers({
       host: "192.168.2.45:13001",

@@ -1,3 +1,5 @@
+import { isIP } from "node:net";
+
 import { getEnvironment } from "@/lib/env";
 
 export class SameOriginError extends Error {
@@ -33,6 +35,17 @@ export function assertSameOrigin(
     // protocol check; APP_ORIGIN remains the canonical fallback.
     const requestHost = headers.get("host");
     if (requestHost && origin.protocol === configured.protocol && origin.host === requestHost) {
+      return;
+    }
+
+    // LAN users may reach this single-host deployment through any assigned IP.
+    // Keep the protocol and configured application port fixed so a random
+    // website cannot use a different service endpoint as the request origin.
+    if (
+      isIP(origin.hostname) !== 0 &&
+      origin.protocol === configured.protocol &&
+      origin.port === configured.port
+    ) {
       return;
     }
   } catch {
