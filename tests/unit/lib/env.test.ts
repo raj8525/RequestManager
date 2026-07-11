@@ -20,17 +20,23 @@ describe("getEnvironment", () => {
     ).toBe(true);
   });
 
-  it("forces secure cookies in production when configuration is absent", () => {
+  it("uses non-secure cookies for an HTTP production origin", () => {
     expect(
       getEnvironment(environment({ NODE_ENV: "production" })).secureCookies,
+    ).toBe(false);
+  });
+
+  it("uses secure cookies for an HTTPS origin", () => {
+    expect(
+      getEnvironment(
+        environment({ NODE_ENV: "production", APP_ORIGIN: "https://requests.example.test" }),
+      ).secureCookies,
     ).toBe(true);
   });
 
-  it("does not allow production configuration to disable secure cookies", () => {
+  it("allows explicitly secure cookies for an HTTP origin", () => {
     expect(
-      getEnvironment(
-        environment({ NODE_ENV: "production", SECURE_COOKIES: "false" }),
-      ).secureCookies,
+      getEnvironment(environment({ SECURE_COOKIES: "true" })).secureCookies,
     ).toBe(true);
   });
 });

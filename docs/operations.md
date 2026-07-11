@@ -16,7 +16,7 @@
 | `TEMP_UPLOADS_PATH` | `data/tmp` |
 | `BACKUP_PATH` | `data/backups` |
 | `APP_ORIGIN` | `http://localhost:13001` |
-| `SECURE_COOKIES` | `false`，生产环境强制为安全 Cookie |
+| `SECURE_COOKIES` | `false`；HTTPS `APP_ORIGIN` 自动使用安全 Cookie，HTTP 部署可保持 `false` |
 | `TRUST_PROXY_HEADERS` | `false` |
 
 只有在受控反向代理覆盖客户端地址头时才启用 `TRUST_PROXY_HEADERS=true`。

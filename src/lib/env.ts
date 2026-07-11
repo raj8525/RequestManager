@@ -33,13 +33,16 @@ export function getEnvironment(
     false,
   );
 
+  const appOrigin = normalizedOrigin(
+    environment.APP_ORIGIN ?? "http://localhost:13001",
+  );
+
   return {
     databasePath: environment.DATABASE_PATH ?? "data/request-manager.db",
     uploadsPath: environment.UPLOADS_PATH ?? "data/uploads",
     temporaryUploadsPath: environment.TEMP_UPLOADS_PATH ?? "data/tmp",
-    appOrigin: normalizedOrigin(environment.APP_ORIGIN ?? "http://localhost:13001"),
-    secureCookies:
-      environment.NODE_ENV === "production" || configuredSecureCookies,
+    appOrigin,
+    secureCookies: appOrigin.startsWith("https://") || configuredSecureCookies,
     trustProxyHeaders: booleanValue(
       "TRUST_PROXY_HEADERS",
       environment.TRUST_PROXY_HEADERS,
