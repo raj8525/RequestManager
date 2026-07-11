@@ -25,7 +25,16 @@ export function assertSameOrigin(
   let applicationOrigin: string;
   try {
     origin = new URL(rawOrigin);
-    applicationOrigin = new URL(configuredOrigin).origin;
+    const configured = new URL(configuredOrigin);
+    applicationOrigin = configured.origin;
+
+    // The app may be opened through localhost, a LAN address, or another
+    // hostname. Accept the browser's same-host origin while retaining the
+    // protocol check; APP_ORIGIN remains the canonical fallback.
+    const requestHost = headers.get("host");
+    if (requestHost && origin.protocol === configured.protocol && origin.host === requestHost) {
+      return;
+    }
   } catch {
     throw new SameOriginError();
   }

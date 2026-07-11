@@ -14,9 +14,21 @@ describe("assertSameOrigin", () => {
     ).not.toThrow();
   });
 
-  it("rejects an origin that matches the request host but not APP_ORIGIN", () => {
-    const request = new Request("http://localhost/actions", {
-      headers: { host: "localhost:3000", origin: "http://localhost:3000" },
+  it("accepts a same-host LAN origin when APP_ORIGIN uses another hostname", () => {
+    const request = new Headers({
+      host: "192.168.2.45:13001",
+      origin: "http://192.168.2.45:13001",
+    });
+
+    expect(() =>
+      assertSameOrigin(request, "http://requests.example.test"),
+    ).not.toThrow();
+  });
+
+  it("rejects a different origin host", () => {
+    const request = new Headers({
+      host: "192.168.2.45:13001",
+      origin: "http://attacker.example",
     });
 
     expect(() =>
