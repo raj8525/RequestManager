@@ -36,6 +36,19 @@ describe("assertSameOrigin", () => {
     ).not.toThrow();
   });
 
+  it("accepts a TLS-terminating tunnel's forwarded public host", () => {
+    const request = new Headers({
+      host: "127.0.0.1:13001",
+      "x-forwarded-host": "requests.example-tunnel.test",
+      "x-forwarded-proto": "https",
+      origin: "https://requests.example-tunnel.test",
+    });
+
+    expect(() =>
+      assertSameOrigin(request, "http://localhost:13001"),
+    ).not.toThrow();
+  });
+
   it("rejects a different origin host", () => {
     const request = new Headers({
       host: "192.168.2.45:13001",
@@ -51,7 +64,6 @@ describe("assertSameOrigin", () => {
     const headers = new Headers({
       host: "requests.example.test",
       origin: "http://requests.example.test",
-      "x-forwarded-proto": "http",
     });
 
     expect(() =>

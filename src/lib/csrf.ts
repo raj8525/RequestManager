@@ -30,11 +30,25 @@ export function assertSameOrigin(
     const configured = new URL(configuredOrigin);
     applicationOrigin = configured.origin;
 
-    // The app may be opened through localhost, a LAN address, or another
-    // hostname. Accept the browser's same-host origin while retaining the
-    // protocol check; APP_ORIGIN remains the canonical fallback.
-    const requestHost = headers.get("host");
-    if (requestHost && origin.protocol === configured.protocol && origin.host === requestHost) {
+    // The browser may reach the app through localhost, a LAN address, or a
+    // TLS-terminating tunnel. The tunnel's public host is the browser-visible
+    // same-origin boundary even when the internal service uses HTTP.
+    const requestHost =
+      headers.get("x-forwarded-host")?.split(",", 1)[0]?.trim() ||
+      headers.get("host");
+    const forwardedProtocol = headers
+      .get("x-forwarded-proto")
+      ?.split(",", 1)[0]
+      ?.trim()
+      .toLowerCase();
+    const expectedProtocol = forwardedProtocol
+      ? `${forwardedProtocol}:`
+      : configured.protocol;
+    if (
+      requestHost &&
+      origin.host === requestHost &&
+      origin.protocol === expectedProtocol
+    ) {
       return;
     }
 
