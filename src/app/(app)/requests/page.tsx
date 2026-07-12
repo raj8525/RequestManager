@@ -102,6 +102,8 @@ export default async function RequestsPage({
   }
 
   const projectOptions = projectResult.data.map(({ id, code, name }) => ({ id, code, name }));
+  const visibleQuestions = questionResult.data.filter((q) => !values.projectId || q.projectId === Number(values.projectId)).filter((q) => !values.search || q.questionNumber.toLowerCase().includes(values.search.toLowerCase()) || q.content.toLowerCase().includes(values.search.toLowerCase()));
+  const needsQuestionAttention = (status: string) => actor.role === "CUSTOMER" ? status === "WAITING_CUSTOMER" : status === "WAITING_DEVELOPER";
   return (
     <div className="page-stack">
       <PageHeader
@@ -122,12 +124,13 @@ export default async function RequestsPage({
         }
       />
       <RequestToolbar projects={projectOptions} values={values} />
-      <DeveloperQuestionList role={actor.role} items={questionResult.data.filter((q) => !values.projectId || q.projectId === Number(values.projectId)).filter((q) => !values.search || q.questionNumber.toLowerCase().includes(values.search.toLowerCase()) || q.content.toLowerCase().includes(values.search.toLowerCase()))} />
+      <DeveloperQuestionList role={actor.role} items={visibleQuestions.filter((q) => needsQuestionAttention(q.attentionStatus))} />
       <RequestList
         role={actor.role}
         actorId={actor.id}
         items={requestResult.data.items}
       />
+      <DeveloperQuestionList role={actor.role} items={visibleQuestions.filter((q) => !needsQuestionAttention(q.attentionStatus))} />
       <Pagination
         pathname="/requests"
         searchParams={values}

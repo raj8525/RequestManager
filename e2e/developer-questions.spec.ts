@@ -32,4 +32,20 @@ test("developer question moves attention between customer and developer", async 
   await expect(page.getByText("已查看", { exact: true })).toBeVisible();
   await page.goto("/requests");
   await expect(page.getByTestId(`question-row-${questionNumber}`)).not.toHaveAttribute("data-attention", "question-developer");
+
+  await loginAs(page, "customerA");
+  await page.goto(`/questions/${questionNumber}`);
+  await page.getByLabel("回复开发者").fill("再补充一个客户侧验证结果。");
+  await page.getByRole("button", { name: "发送" }).click();
+  await loginAs(page, "developerA");
+  await expect(page.getByTestId(`question-row-${questionNumber}`)).toHaveAttribute("data-attention", "question-developer");
+  await page.goto(`/questions/${questionNumber}`);
+  await page.getByLabel("继续追问").fill("请项目中的另一位客户也确认。");
+  await page.getByRole("button", { name: "发送" }).click();
+
+  await loginAs(page, "customerB");
+  await expect(page.getByTestId(`question-row-${questionNumber}`)).toHaveAttribute("data-attention", "question-customer");
+  await loginAs(page, "unassignedCustomer");
+  await page.goto(`/questions/${questionNumber}`);
+  await expect(page.getByText("没有找到这项内容")).toBeVisible();
 });
