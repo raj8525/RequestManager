@@ -30,6 +30,14 @@ export type ClarificationMessage = typeof schema.clarificationMessages.$inferSel
 export type NewClarificationMessage = typeof schema.clarificationMessages.$inferInsert;
 export type RequestEvent = typeof schema.requestEvents.$inferSelect;
 export type NewRequestEvent = typeof schema.requestEvents.$inferInsert;
+export type DeveloperQuestion = typeof schema.developerQuestions.$inferSelect;
+export type NewDeveloperQuestion = typeof schema.developerQuestions.$inferInsert;
+export type DeveloperQuestionMessage = typeof schema.developerQuestionMessages.$inferSelect;
+export type NewDeveloperQuestionMessage = typeof schema.developerQuestionMessages.$inferInsert;
+export type DeveloperQuestionAttachment = typeof schema.developerQuestionAttachments.$inferSelect;
+export type NewDeveloperQuestionAttachment = typeof schema.developerQuestionAttachments.$inferInsert;
+export type DeveloperQuestionEvent = typeof schema.developerQuestionEvents.$inferSelect;
+export type NewDeveloperQuestionEvent = typeof schema.developerQuestionEvents.$inferInsert;
 
 export type UserRole = (typeof schema.userRoles)[number];
 export type RequestType = (typeof schema.requestTypes)[number];
@@ -38,3 +46,7 @@ export type RequestProgressStatus = (typeof schema.requestProgressStatuses)[numb
 export type RequestRecordStatus = (typeof schema.requestRecordStatuses)[number];
 export type RequestEventType = (typeof schema.requestEventTypes)[number];
 export type RequestEventVisibility = (typeof schema.requestEventVisibilities)[number];
+export type DeveloperQuestionAttentionStatus =
+  (typeof schema.developerQuestionAttentionStatuses)[number];
+export type DeveloperQuestionEventType =
+  (typeof schema.developerQuestionEventTypes)[number];

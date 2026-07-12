@@ -33,6 +33,17 @@ export const requestEventTypes = [
   "CLARIFICATION_REPLIED",
 ] as const;
 export const requestEventVisibilities = ["PUBLIC", "DEVELOPER"] as const;
+export const developerQuestionAttentionStatuses = [
+  "WAITING_CUSTOMER",
+  "WAITING_DEVELOPER",
+  "SEEN",
+] as const;
+export const developerQuestionEventTypes = [
+  "QUESTION_CREATED",
+  "DEVELOPER_FOLLOWED_UP",
+  "CUSTOMER_REPLIED",
+  "MARKED_SEEN",
+] as const;
 
 const nowInMilliseconds = sql`(unixepoch() * 1000)`;
 
@@ -141,6 +152,85 @@ export const projectMemberships = sqliteTable(
       columns: [table.customerId, table.projectId],
     }),
     index("project_memberships_project_id_idx").on(table.projectId),
+  ],
+);
+
+export const developerQuestions = sqliteTable(
+  "developer_questions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    projectId: integer("project_id").notNull().references(() => projects.id),
+    createdById: integer("created_by_id").notNull().references(() => users.id),
+    content: text("content").notNull(),
+    attentionStatus: text("attention_status", {
+      enum: developerQuestionAttentionStatuses,
+    }).notNull().default("WAITING_CUSTOMER"),
+    version: integer("version").notNull().default(1),
+    idempotencyKey: text("idempotency_key").notNull(),
+    createPayloadFingerprint: text("create_payload_fingerprint").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowInMilliseconds),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(nowInMilliseconds),
+  },
+  (table) => [
+    uniqueIndex("developer_questions_creator_idempotency_unique").on(table.createdById, table.idempotencyKey),
+    index("developer_questions_project_id_idx").on(table.projectId),
+    index("developer_questions_attention_updated_idx").on(table.attentionStatus, table.updatedAt, table.id),
+    check("developer_questions_attention_check", sql`${table.attentionStatus} in ('WAITING_CUSTOMER', 'WAITING_DEVELOPER', 'SEEN')`),
+    check("developer_questions_version_check", sql`${table.version} >= 1`),
+  ],
+);
+
+export const developerQuestionMessages = sqliteTable(
+  "developer_question_messages",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    questionId: integer("question_id").notNull().references(() => developerQuestions.id, { onDelete: "cascade" }),
+    authorId: integer("author_id").notNull().references(() => users.id),
+    authorRole: text("author_role", { enum: userRoles }).notNull(),
+    content: text("content").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowInMilliseconds),
+  },
+  (table) => [
+    uniqueIndex("developer_question_messages_author_idempotency_unique").on(table.authorId, table.idempotencyKey),
+    index("developer_question_messages_question_id_idx").on(table.questionId, table.createdAt, table.id),
+    check("developer_question_messages_author_role_check", sql`${table.authorRole} in ('CUSTOMER', 'DEVELOPER')`),
+  ],
+);
+
+export const developerQuestionAttachments = sqliteTable(
+  "developer_question_attachments",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    questionId: integer("question_id").notNull().references(() => developerQuestions.id, { onDelete: "cascade" }),
+    messageId: integer("message_id").references(() => developerQuestionMessages.id, { onDelete: "cascade" }),
+    uploadedById: integer("uploaded_by_id").notNull().references(() => users.id),
+    storageName: text("storage_name").notNull(),
+    originalName: text("original_name").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    sha256: text("sha256").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowInMilliseconds),
+  },
+  (table) => [
+    uniqueIndex("developer_question_attachments_storage_name_unique").on(table.storageName),
+    index("developer_question_attachments_question_id_idx").on(table.questionId, table.messageId),
+    check("developer_question_attachments_size_check", sql`${table.sizeBytes} >= 0`),
+  ],
+);
+
+export const developerQuestionEvents = sqliteTable(
+  "developer_question_events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    questionId: integer("question_id").notNull().references(() => developerQuestions.id, { onDelete: "cascade" }),
+    actorId: integer("actor_id").references(() => users.id),
+    eventType: text("event_type", { enum: developerQuestionEventTypes }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowInMilliseconds),
+  },
+  (table) => [
+    index("developer_question_events_question_id_idx").on(table.questionId, table.createdAt, table.id),
+    check("developer_question_events_type_check", sql`${table.eventType} in ('QUESTION_CREATED', 'DEVELOPER_FOLLOWED_UP', 'CUSTOMER_REPLIED', 'MARKED_SEEN')`),
   ],
 );
 
