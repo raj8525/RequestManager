@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { MessageSquarePlus, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -14,6 +14,8 @@ import {
 } from "@/db/schema";
 import { getRuntimeDatabase } from "@/db/runtime";
 import { listAccessibleProjects } from "@/features/projects/queries";
+import { DeveloperQuestionList } from "@/features/developer-questions/components/question-list";
+import { listDeveloperQuestions } from "@/features/developer-questions/queries";
 import { RequestList } from "@/features/requests/components/request-list";
 import {
   RequestToolbar,
@@ -82,7 +84,8 @@ export default async function RequestsPage({
   };
   const requestResult = listRequests(database, actor, filters);
   const projectResult = listAccessibleProjects(database, actor);
-  if (!requestResult.ok || !projectResult.ok) {
+  const questionResult = listDeveloperQuestions(database, actor);
+  if (!requestResult.ok || !projectResult.ok || !questionResult.ok) {
     const message = !requestResult.ok
       ? requestResult.message
       : !projectResult.ok
@@ -115,10 +118,11 @@ export default async function RequestsPage({
               <Plus aria-hidden="true" size={17} />
               新建需求
             </Link>
-          ) : null
+          ) : <Link href="/questions/new" className={buttonClassName()}><MessageSquarePlus aria-hidden="true" size={17} />新建开发者提问</Link>
         }
       />
       <RequestToolbar projects={projectOptions} values={values} />
+      <DeveloperQuestionList role={actor.role} items={questionResult.data.filter((q) => !values.projectId || q.projectId === Number(values.projectId)).filter((q) => !values.search || q.questionNumber.toLowerCase().includes(values.search.toLowerCase()) || q.content.toLowerCase().includes(values.search.toLowerCase()))} />
       <RequestList
         role={actor.role}
         actorId={actor.id}

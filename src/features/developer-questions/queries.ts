@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 
 import type { AuthenticatedUser } from "@/auth/session-service";
 import {
@@ -71,4 +71,19 @@ export function getDeveloperQuestionAttachment(database: AppDatabase, actor: Aut
   const attachment = database.db.select().from(developerQuestionAttachments).where(eq(developerQuestionAttachments.id, attachmentId)).get();
   if (!attachment || !canAccess(database, actor, attachment.questionId)) return actionFailure("NOT_FOUND", "截图不存在");
   return actionSuccess(attachment);
+}
+
+export type DeveloperQuestionListItemDto = DeveloperQuestionDto & {
+  project: { id: number; code: string; name: string };
+  createdBy: { id: number; displayName: string };
+};
+
+export function listDeveloperQuestions(database: AppDatabase, actor: AuthenticatedUser): ActionResult<DeveloperQuestionListItemDto[]> {
+  const live = database.db.select().from(users).where(eq(users.id, actor.id)).get();
+  if (!live || !live.isActive || live.mustChangePassword || live.role !== actor.role) return actionFailure("FORBIDDEN", "无权查看开发者提问");
+  const base = database.db.select({ question: developerQuestions, projectCode: projects.code, projectName: projects.name, creatorName: users.displayName }).from(developerQuestions).innerJoin(projects, eq(projects.id, developerQuestions.projectId)).innerJoin(users, eq(users.id, developerQuestions.createdById));
+  const rows = actor.role === "CUSTOMER"
+    ? base.innerJoin(projectMemberships, and(eq(projectMemberships.projectId, developerQuestions.projectId), eq(projectMemberships.customerId, actor.id))).orderBy(desc(developerQuestions.updatedAt), desc(developerQuestions.id)).all()
+    : base.orderBy(desc(developerQuestions.updatedAt), desc(developerQuestions.id)).all();
+  return actionSuccess(rows.map((row) => ({ ...presentDeveloperQuestion(row.question), project: { id: row.question.projectId, code: row.projectCode, name: row.projectName }, createdBy: { id: row.question.createdById, displayName: row.creatorName } })));
 }

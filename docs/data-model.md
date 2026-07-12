@@ -15,6 +15,10 @@
 | `private_notes` | 需求、开发者、正文 | 每位开发者在每条需求最多一份 |
 | `clarification_messages` | 需求、作者、作者角色、正文、幂等键 | 作者加幂等键唯一；消息不可编辑或删除 |
 | `request_events` | 需求、操作者、类型、可见性、结构化载荷 | 事件类型和可见性检查；私人笔记正文不写入 |
+| `developer_questions` | 项目、开发者、正文、提醒状态、版本 | 创建者加幂等键唯一；三态检查 |
+| `developer_question_messages` | 提问、作者、角色、正文 | 作者加幂等键唯一；追加写入 |
+| `developer_question_attachments` | 提问、可选消息、文件元数据 | 存储名唯一；大小非负 |
+| `developer_question_events` | 提问、操作者、事件类型 | 创建、追问、回复、已查看事件检查 |
 
 Drizzle 使用内部表 `__drizzle_migrations` 记录有序迁移哈希和创建时间。备份 manifest 会保存这一 journal，恢复时要求 manifest、快照数据库和当前代码三方完全一致。
 
@@ -26,6 +30,7 @@ Drizzle 使用内部表 `__drizzle_migrations` 记录有序迁移哈希和创建
 - `requests.progress_status`：`UNSCHEDULED`、`SCHEDULED`、`COMPLETED`
 - `requests.record_status`：`ACTIVE`、`PAUSED`、`ARCHIVED`
 - `request_events.visibility`：`PUBLIC`、`DEVELOPER`
+- `developer_questions.attention_status`：`WAITING_CUSTOMER`、`WAITING_DEVELOPER`、`SEEN`
 
 ## 删除与保留
 

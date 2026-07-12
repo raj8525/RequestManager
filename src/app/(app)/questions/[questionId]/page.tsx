@@ -1,0 +1,14 @@
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { requireCurrentUser } from "@/auth/current-user";
+import { PageHeader } from "@/components/page-header";
+import { buttonClassName } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { getRuntimeDatabase } from "@/db/runtime";
+import { AttachmentGallery } from "@/features/attachments/attachment-gallery";
+import { DeveloperQuestionForm } from "@/features/developer-questions/components/question-form";
+import { MarkSeenButton } from "@/features/developer-questions/components/mark-seen-button";
+import { getDeveloperQuestionDetail, listDeveloperQuestionMessages } from "@/features/developer-questions/queries";
+import { parseQuestionNumber } from "@/lib/question-number";
+export default async function QuestionPage({ params }: { params: Promise<{ questionId: string }> }) { const db = getRuntimeDatabase(); const actor = await requireCurrentUser(db); const raw = (await params).questionId; const id = parseQuestionNumber(raw) ?? Number(raw); if (!Number.isSafeInteger(id) || id <= 0) notFound(); const detail = getDeveloperQuestionDetail(db, actor, id); const messages = listDeveloperQuestionMessages(db, actor, id); if (!detail.ok || !messages.ok) notFound(); const q = detail.data; return <div className="page-stack page-stack--detail"><PageHeader eyebrow={`${q.project.code} · ${q.project.name}`} title={q.questionNumber} description="开发者提问与回复记录" actions={<Link href="/requests" className={buttonClassName({ variant: "quiet" })}><ArrowLeft size={17} />返回列表</Link>} /><section className="request-overview"><div className="request-overview__topline"><Badge tone="info">开发者提问</Badge><Badge>{q.attentionStatus === "WAITING_CUSTOMER" ? "待客户回复" : q.attentionStatus === "WAITING_DEVELOPER" ? "待开发者查看" : "已查看"}</Badge>{actor.role === "DEVELOPER" && q.attentionStatus === "WAITING_DEVELOPER" ? <MarkSeenButton questionId={q.id} version={q.version} /> : null}</div><p className="request-content plain-text">{q.content}</p><AttachmentGallery attachments={q.attachments} /></section><section className="detail-section"><div className="detail-section__heading"><h2>沟通记录</h2></div>{messages.data.length === 0 ? <p className="section-empty">暂无回复</p> : <ol className="question-thread">{messages.data.map((m) => <li key={m.id}><strong>{m.author.displayName}</strong><small>{m.authorRole === "DEVELOPER" ? "开发者" : "客户"}</small><p className="plain-text">{m.content}</p><AttachmentGallery attachments={m.attachments} /></li>)}</ol>}</section>{q.project.isActive ? <section className="detail-section"><DeveloperQuestionForm question={{ id: q.id, questionNumber: q.questionNumber, version: q.version }} role={actor.role} /></section> : <div className="form-alert">停用项目中的提问为只读</div>}</div>; }

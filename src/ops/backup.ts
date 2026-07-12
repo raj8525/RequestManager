@@ -82,7 +82,7 @@ function backupName(now: Date): string {
 function snapshotAttachments(sqlite: Database.Database): SnapshotAttachment[] {
   return sqlite
     .prepare(
-      "select storage_name as storageName, size_bytes as sizeBytes, sha256 from attachments order by storage_name",
+      "select storage_name as storageName, size_bytes as sizeBytes, sha256 from attachments union all select storage_name, size_bytes, sha256 from developer_question_attachments order by storageName",
     )
     .all() as SnapshotAttachment[];
 }
