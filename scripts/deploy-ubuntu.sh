@@ -546,20 +546,26 @@ sync_to_server() {
   revision="$(git -C "${repository_root}" rev-parse HEAD)"
   git -C "${repository_root}" branch -r --contains "${revision}" | grep -q . || die "local revision has not been pushed to origin"
 
-  local temporary_root
-  [[ -n "${HOME:-}" && -d "${HOME}" ]] || die "HOME must be a writable directory for synchronization staging"
-  temporary_root="$(mktemp -d "${HOME}/.request-manager-sync.XXXXXX")"
-  SSH_CONTROL_PATH="${temporary_root}/ssh-%C"
+  local temporary_root=""
+  local ssh_control_root=""
   cleanup_sync_temp() {
     if [[ -n "${SSH_CONTROL_PATH:-}" ]]; then
       ssh -p "${ssh_port}" -o "ControlPath=${SSH_CONTROL_PATH}" -O exit "${target}" >/dev/null 2>&1 || true
       SSH_CONTROL_PATH=""
+    fi
+    if [[ "${ssh_control_root:-}" == /tmp/request-manager-ssh.* && -d "${ssh_control_root}" && ! -L "${ssh_control_root}" ]]; then
+      find "${ssh_control_root}" -depth -delete
     fi
     if [[ -n "${temporary_root:-}" && "${temporary_root}" == *request-manager-sync.* && -d "${temporary_root}" ]]; then
       find "${temporary_root}" -depth -delete
     fi
   }
   trap cleanup_sync_temp EXIT
+  [[ -n "${HOME:-}" && -d "${HOME}" ]] || die "HOME must be a writable directory for synchronization staging"
+  temporary_root="$(mktemp -d "${HOME}/.request-manager-sync.XXXXXX")"
+  ssh_control_root="$(mktemp -d /tmp/request-manager-ssh.XXXXXX)"
+  chmod 0700 "${ssh_control_root}"
+  SSH_CONTROL_PATH="${ssh_control_root}/control"
   mkdir -p "${temporary_root}/backups"
   (cd "${repository_root}" && BACKUP_PATH="${temporary_root}/backups" npm run ops:backup)
   local backups=("${temporary_root}"/backups/request-manager-*)

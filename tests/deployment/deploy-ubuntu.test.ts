@@ -180,7 +180,11 @@ describe("deployment safety contract", () => {
 
     expect(source).toContain("ControlMaster=auto");
     expect(source).toContain("ControlPersist=60");
-    expect(body).toContain('SSH_CONTROL_PATH="${temporary_root}/ssh-%C"');
+    expect(body).toContain(
+      'ssh_control_root="$(mktemp -d /tmp/request-manager-ssh.XXXXXX)"',
+    );
+    expect(body).toContain('SSH_CONTROL_PATH="${ssh_control_root}/control"');
+    expect(body).not.toContain('SSH_CONTROL_PATH="${temporary_root}');
     expect(body.indexOf("SSH_CONTROL_PATH=")).toBeLessThan(
       body.indexOf("ssh_transport"),
     );
