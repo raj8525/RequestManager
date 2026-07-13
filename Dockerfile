@@ -32,4 +32,4 @@ RUN mkdir -p /app/data && chown 10001:10001 /app/data
 USER request-manager
 EXPOSE 13001
 
-CMD ["npm", "run", "start", "--", "--hostname", "0.0.0.0"]
+CMD ["node", "node_modules/next/dist/bin/next", "start", "--port", "13001", "--hostname", "0.0.0.0"]

@@ -136,6 +136,21 @@ describe("deployment safety contract", () => {
     expect(source).toContain("--app-stopped");
   });
 
+  test("clears only the stopped container's regular database lock before migration", () => {
+    const body = source.slice(
+      source.indexOf("deploy_server()"),
+      source.indexOf("confirm_sync()"),
+    );
+
+    expect(body).toContain("clear_stopped_database_lock");
+    expect(body.indexOf("clear_stopped_database_lock")).toBeGreaterThan(
+      body.indexOf('docker stop "${CONTAINER_NAME}"'),
+    );
+    expect(body.indexOf("clear_stopped_database_lock")).toBeLessThan(
+      body.indexOf("npm run db:migrate"),
+    );
+  });
+
   test("sync uses a complete application backup before SSH and scp", () => {
     const body = source.slice(source.indexOf("sync_to_server()"));
 

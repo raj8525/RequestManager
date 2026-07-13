@@ -281,6 +281,14 @@ container_running() {
   [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER_NAME}" 2>/dev/null || true)" == "true" ]]
 }
 
+clear_stopped_database_lock() {
+  local lock_path="${DATA_ROOT}/request-manager.db.process-lock"
+  [[ -e "${lock_path}" ]] || return 0
+  [[ -f "${lock_path}" && ! -L "${lock_path}" ]] || die "database process lock must be a regular file"
+  container_running && die "refusing to clear database lock while application is running"
+  run rm -f -- "${lock_path}"
+}
+
 one_shot() {
   local image="$1"
   shift
@@ -372,6 +380,7 @@ rollback_release() {
     run docker stop "${CONTAINER_NAME}" >/dev/null 2>&1 || true
     run docker rm "${CONTAINER_NAME}" >/dev/null 2>&1 || true
   fi
+  clear_stopped_database_lock
   local container_backup
   container_backup="/app/data/backups/$(basename "${backup_path}")"
   one_shot "${old_image}" npm run ops:restore -- "${container_backup}" --confirm-restore --app-stopped
@@ -420,6 +429,7 @@ deploy_server() {
     run docker stop "${CONTAINER_NAME}"
     run docker rm "${CONTAINER_NAME}"
   fi
+  clear_stopped_database_lock
 
   if ! one_shot "${DEPLOYED_IMAGE}" npm run db:migrate; then
     [[ -n "${old_image}" && -n "${old_backup}" ]] && rollback_release "${old_image}" "${old_backup}" "${port}" || true
@@ -557,13 +567,16 @@ receive_uploaded_backup() {
   container_incoming="/app/data/incoming/$(basename "${incoming}")"
 
   run docker stop "${CONTAINER_NAME}"
+  clear_stopped_database_lock
   if ! one_shot "${image}" npm run ops:restore -- "${container_incoming}" --confirm-restore --app-stopped; then
+    clear_stopped_database_lock
     run docker start "${CONTAINER_NAME}" >/dev/null
     die "uploaded backup validation or restore failed; original service restarted"
   fi
   run docker start "${CONTAINER_NAME}" >/dev/null
   if ! wait_for_health "${port}" || ! run docker exec "${CONTAINER_NAME}" npm run ops:attachments:check; then
     run docker stop "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+    clear_stopped_database_lock
     local protection_container
     protection_container="/app/data/backups/$(basename "${protection_backup}")"
     one_shot "${image}" npm run ops:restore -- "${protection_container}" --confirm-restore --app-stopped

@@ -18,12 +18,23 @@ import { assertSafeManagedFilePath } from "@/ops/paths";
 
 const INCOMPLETE_LOCK_GRACE_MS = 30_000;
 
+type ProcessWithInstanceId = NodeJS.Process & {
+  __requestManagerProcessInstanceId?: string;
+};
+
+const processWithInstanceId = process as ProcessWithInstanceId;
+const PROCESS_INSTANCE_ID =
+  processWithInstanceId.__requestManagerProcessInstanceId ?? randomUUID();
+processWithInstanceId.__requestManagerProcessInstanceId = PROCESS_INSTANCE_ID;
+
 const lockMetadataSchema = z
   .object({
     version: z.literal(1),
     pid: z.number().int().positive(),
     owner: z.string().min(1),
     token: z.string().min(1),
+    processInstanceId: z.uuid().optional(),
+    processStartIdentity: z.string().regex(/^\d+$/).optional(),
     createdAt: z.iso.datetime({ offset: true }),
   })
   .strict();
@@ -61,6 +72,20 @@ function processIsAlive(pid: number): boolean {
   }
 }
 
+function processStartIdentity(pid: number): string | null {
+  if (process.platform !== "linux") return null;
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+    const commandEnd = stat.lastIndexOf(")");
+    if (commandEnd < 0) return null;
+    const fieldsAfterCommand = stat.slice(commandEnd + 2).trim().split(/\s+/);
+    const startTime = fieldsAfterCommand[19];
+    return /^\d+$/.test(startTime ?? "") ? startTime : null;
+  } catch {
+    return null;
+  }
+}
+
 function retireStaleLock(path: string): boolean {
   let stats;
   try {
@@ -73,7 +98,22 @@ function retireStaleLock(path: string): boolean {
     throw new Error("database process lock must be a regular file");
   }
   const metadata = readLockMetadata(path);
-  if (metadata && processIsAlive(metadata.pid)) {
+  const reusedCurrentPid =
+    metadata?.pid === process.pid &&
+    metadata.processInstanceId !== PROCESS_INSTANCE_ID;
+  const observedStartIdentity = metadata
+    ? processStartIdentity(metadata.pid)
+    : null;
+  const reusedPid =
+    metadata?.processStartIdentity !== undefined &&
+    observedStartIdentity !== null &&
+    metadata.processStartIdentity !== observedStartIdentity;
+  if (
+    metadata &&
+    processIsAlive(metadata.pid) &&
+    !reusedCurrentPid &&
+    !reusedPid
+  ) {
     throw new Error(
       `database process lock is held by ${metadata.owner} (pid ${metadata.pid})`,
     );
@@ -115,6 +155,8 @@ export function acquireDatabaseProcessLock(
         pid: process.pid,
         owner,
         token,
+        processInstanceId: PROCESS_INSTANCE_ID,
+        processStartIdentity: processStartIdentity(process.pid) ?? undefined,
         createdAt: new Date().toISOString(),
       };
       writeFileSync(descriptor, `${JSON.stringify(metadata)}\n`, "utf8");

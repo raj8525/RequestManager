@@ -13,7 +13,7 @@ describe("deployment container contract", () => {
     expect(dockerfile).toContain("USER request-manager");
     expect(dockerfile).toContain("EXPOSE 13001");
     expect(dockerfile).toContain(
-      'CMD ["npm", "run", "start", "--", "--hostname", "0.0.0.0"]',
+      'CMD ["node", "node_modules/next/dist/bin/next", "start", "--port", "13001", "--hostname", "0.0.0.0"]',
     );
   });
 

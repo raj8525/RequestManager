@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import {
   mkdtempSync,
+  readFileSync,
   realpathSync,
   rmSync,
   utimesSync,
@@ -79,5 +80,51 @@ describe("database process lock", () => {
     const lock = acquireDatabaseProcessLock(path, "restore");
     expect(lock.owner).toBe("restore");
     lock.release();
+  });
+
+  it("recovers a legacy lock when a restarted container reuses the same pid", () => {
+    const path = databasePath();
+    const lockPath = databaseProcessLockPath(path);
+    writeFileSync(
+      lockPath,
+      `${JSON.stringify({
+        version: 1,
+        pid: process.pid,
+        owner: "application",
+        token: "previous-container-token",
+        createdAt: "2020-01-01T00:00:00.000Z",
+      })}\n`,
+    );
+
+    const lock = acquireDatabaseProcessLock(path, "application");
+    expect(lock.owner).toBe("application");
+    lock.release();
+  });
+
+  it("still rejects a second lock from the same live process instance", () => {
+    const path = databasePath();
+    const first = acquireDatabaseProcessLock(path, "application");
+    try {
+      expect(() => acquireDatabaseProcessLock(path, "restore")).toThrow(
+        /held by application/,
+      );
+    } finally {
+      first.release();
+    }
+  });
+
+  it("records Linux process start identity to distinguish reused pids", () => {
+    if (process.platform !== "linux") return;
+    const path = databasePath();
+    const lockPath = databaseProcessLockPath(path);
+    const lock = acquireDatabaseProcessLock(path, "application");
+    try {
+      const metadata = JSON.parse(readFileSync(lockPath, "utf8")) as {
+        processStartIdentity?: string;
+      };
+      expect(metadata.processStartIdentity).toMatch(/^\d+$/);
+    } finally {
+      lock.release();
+    }
   });
 });
