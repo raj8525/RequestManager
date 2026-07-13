@@ -214,13 +214,24 @@ ensure_checkout() {
   local revision="$2"
   assert_no_symlink_components "${INSTALL_ROOT}"
   if [[ ! -e "${INSTALL_ROOT}" ]]; then
-    run git clone --no-checkout "${repository}" "${INSTALL_ROOT}"
+    run git clone "${repository}" "${INSTALL_ROOT}"
   fi
   [[ -d "${INSTALL_ROOT}/.git" && ! -L "${INSTALL_ROOT}/.git" ]] || die "install root is not a Git checkout"
   local actual_origin
   actual_origin="$(git -C "${INSTALL_ROOT}" remote get-url origin)"
   [[ "${actual_origin}" == "${repository}" ]] || die "install checkout uses a different origin"
-  [[ -z "$(git -C "${INSTALL_ROOT}" status --porcelain --untracked-files=no)" ]] || die "install checkout has local changes"
+  local checkout_status
+  checkout_status="$(git -C "${INSTALL_ROOT}" status --porcelain --untracked-files=no)"
+  if [[ -n "${checkout_status}" ]]; then
+    local non_git_entry
+    non_git_entry="$(find "${INSTALL_ROOT}" -mindepth 1 -maxdepth 1 ! -name .git -print -quit)"
+    if [[ -z "${non_git_entry}" ]]; then
+      log "Repairing an incomplete initial Git checkout."
+      run git -C "${INSTALL_ROOT}" restore --source=HEAD --staged --worktree -- .
+      checkout_status="$(git -C "${INSTALL_ROOT}" status --porcelain --untracked-files=no)"
+    fi
+  fi
+  [[ -z "${checkout_status}" ]] || die "install checkout has local changes"
   run git -C "${INSTALL_ROOT}" fetch --force --depth 1 origin "${revision}"
   run git -C "${INSTALL_ROOT}" checkout --detach FETCH_HEAD
 }

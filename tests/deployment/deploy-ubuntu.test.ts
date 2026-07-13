@@ -198,6 +198,55 @@ exit 0
     expect(result.status, result.stderr).toBe(0);
     expect(result.stderr).not.toContain("missing dpkg lock timeout");
   });
+
+  test("repairs the empty worktree left by an interrupted no-checkout clone", () => {
+    const sandbox = mkdtempSync(resolve(root, "data/deploy-checkout-test-"));
+    temporaryDirectories.push(sandbox);
+    const sourceRepository = resolve(sandbox, "source");
+    const installRoot = resolve(sandbox, "install");
+    mkdirSync(sourceRepository);
+    expect(
+      spawnSync("git", ["init", "-q", "-b", "main"], {
+        cwd: sourceRepository,
+      }).status,
+    ).toBe(0);
+    writeFileSync(resolve(sourceRepository, "package.json"), '{"private":true}\n');
+    expect(spawnSync("git", ["add", "package.json"], { cwd: sourceRepository }).status).toBe(0);
+    expect(
+      spawnSync(
+        "git",
+        ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "fixture"],
+        { cwd: sourceRepository },
+      ).status,
+    ).toBe(0);
+    expect(
+      spawnSync("git", ["clone", "-q", "--no-checkout", sourceRepository, installRoot]).status,
+    ).toBe(0);
+
+    const result = spawnSync(
+      "bash",
+      [
+        "-c",
+        'deployment_script="$1"; repository="$2"; set --; source "${deployment_script}" >/dev/null; ensure_checkout "${repository}" HEAD',
+        "deployment-checkout-test",
+        script,
+        sourceRepository,
+      ],
+      {
+        cwd: root,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          REQUEST_MANAGER_INSTALL_ROOT: installRoot,
+        },
+      },
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(readFileSync(resolve(installRoot, "package.json"), "utf8")).toContain(
+      '"private":true',
+    );
+  });
 });
 
 describe("deployment documentation contract", () => {
