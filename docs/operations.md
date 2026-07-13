@@ -11,6 +11,8 @@ curl -fsSL https://raw.githubusercontent.com/raj8525/RequestManager/main/scripts
 
 首次部署会通过 `/dev/tty` 隐藏读取首个开发者密码，不把密码写入环境文件或日志。无交互自动化可以临时提供 `REQUEST_MANAGER_ADMIN_PASSWORD`，命令结束后应立即清除。GitHub 公开仓库不需要 Token；脚本不接受带凭据的仓库 URL。
 
+Ubuntu 后台自动更新占用 `dpkg` 时，脚本会让 APT 原子等待最多 600 秒，而不是删除锁文件或与更新进程竞争。超时后应先检查 `systemctl status unattended-upgrades`，待系统更新正常结束再重试部署。
+
 固定布局：
 
 | 路径 | 用途 |

@@ -1,4 +1,11 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -54,7 +61,7 @@ describe("Ubuntu deployment command", () => {
   test("prints the public commands without root", () => {
     const result = runScript(["--help"]);
 
-    expect(result.status).toBe(0);
+    expect(result.status, result.stderr).toBe(0);
     expect(result.stdout).toContain("deploy");
     expect(result.stdout).toContain("sync SSH_TARGET");
     expect(result.stdout).toContain("status");
@@ -150,6 +157,46 @@ describe("deployment safety contract", () => {
   test("never disables SSH host-key verification or evaluates generated text", () => {
     expect(source).not.toContain("StrictHostKeyChecking=no");
     expect(source).not.toMatch(/\beval\b/);
+  });
+
+  test("waits for Ubuntu package-manager locks instead of failing immediately", () => {
+    const sandbox = mkdtempSync(resolve(tmpdir(), "request-manager-apt-test-"));
+    temporaryDirectories.push(sandbox);
+    const bin = resolve(sandbox, "bin");
+    mkdirSync(bin);
+    const apt = resolve(bin, "apt-get");
+    writeFileSync(
+      apt,
+      `#!/usr/bin/env bash
+if [[ " $* " != *" -o DPkg::Lock::Timeout=600 "* ]]; then
+  echo "missing dpkg lock timeout" >&2
+  exit 75
+fi
+exit 0
+`,
+    );
+    chmodSync(apt, 0o755);
+    const systemctl = resolve(bin, "systemctl");
+    writeFileSync(systemctl, "#!/usr/bin/env bash\nexit 0\n");
+    chmodSync(systemctl, 0o755);
+
+    const result = spawnSync(
+      "bash",
+      [
+        "-c",
+        'deployment_script="$1"; set --; source "${deployment_script}" >/dev/null; UBUNTU_CODENAME=jammy; ensure_server_dependencies',
+        "deployment-lock-test",
+        script,
+      ],
+      {
+        cwd: root,
+        encoding: "utf8",
+        env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+      },
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stderr).not.toContain("missing dpkg lock timeout");
   });
 });
 

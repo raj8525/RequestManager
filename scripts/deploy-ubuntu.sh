@@ -9,6 +9,7 @@ readonly DEFAULT_PORT="13001"
 readonly CONTAINER_NAME="request-manager"
 readonly CONTAINER_UID="10001"
 readonly CONTAINER_GID="10001"
+readonly APT_LOCK_TIMEOUT="${REQUEST_MANAGER_APT_LOCK_TIMEOUT:-600}"
 
 INSTALL_ROOT="${REQUEST_MANAGER_INSTALL_ROOT:-/opt/request-manager}"
 DATA_ROOT="${REQUEST_MANAGER_DATA_ROOT:-/var/lib/request-manager}"
@@ -187,8 +188,9 @@ assert_no_symlink_components() {
 
 ensure_server_dependencies() {
   export DEBIAN_FRONTEND=noninteractive
-  run apt-get update
-  run apt-get install -y ca-certificates curl git openssh-client
+  [[ "${APT_LOCK_TIMEOUT}" =~ ^[0-9]+$ ]] || die "invalid APT lock timeout"
+  apt_get update
+  apt_get install -y ca-certificates curl git openssh-client
   if ! command -v docker >/dev/null 2>&1; then
     run install -m 0755 -d /etc/apt/keyrings
     run curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
@@ -197,10 +199,14 @@ ensure_server_dependencies() {
     architecture="$(dpkg --print-architecture)"
     printf 'deb [arch=%s signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu %s stable\n' \
       "${architecture}" "${UBUNTU_CODENAME}" >/etc/apt/sources.list.d/docker.list
-    run apt-get update
-    run apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin
+    apt_get update
+    apt_get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin
   fi
   run systemctl enable --now docker
+}
+
+apt_get() {
+  run apt-get -o "DPkg::Lock::Timeout=${APT_LOCK_TIMEOUT}" "$@"
 }
 
 ensure_checkout() {
