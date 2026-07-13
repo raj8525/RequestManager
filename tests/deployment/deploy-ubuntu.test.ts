@@ -137,6 +137,17 @@ describe("deployment safety contract", () => {
     expect(source).toContain("--app-stopped");
   });
 
+  test("verifies the stopped live database exactly matches the uploaded snapshot", () => {
+    const body = source.slice(
+      source.indexOf("receive_uploaded_backup()"),
+      source.indexOf("deploy_uploaded_bundle()"),
+    );
+
+    expect(body).toContain(
+      'cmp -s "${DATA_ROOT}/request-manager.db" "${incoming}/database.sqlite"',
+    );
+  });
+
   test("clears only the stopped container's regular database lock before migration", () => {
     const body = source.slice(
       source.indexOf("deploy_server()"),
@@ -355,6 +366,47 @@ exit 0
         encoding: "utf8",
       }).stdout.trim(),
     ).toBe(revision);
+  });
+
+  test("adopts a legacy container bind mount when no data root was configured", () => {
+    const sandbox = mkdtempSync(resolve(root, "data/deploy-mount-test-"));
+    temporaryDirectories.push(sandbox);
+    const bin = resolve(sandbox, "bin");
+    const legacyData = resolve(sandbox, "legacy-data");
+    mkdirSync(bin);
+    mkdirSync(legacyData);
+    const docker = resolve(bin, "docker");
+    writeFileSync(
+      docker,
+      `#!/usr/bin/env bash
+if [[ "$1 $2" == "container inspect" ]]; then exit 0; fi
+if [[ "$1" == "inspect" ]]; then printf 'bind|%s\\n' "${legacyData}"; exit 0; fi
+exit 64
+`,
+    );
+    chmodSync(docker, 0o755);
+
+    const result = spawnSync(
+      "bash",
+      [
+        "-c",
+        'deployment_script="$1"; set --; source "${deployment_script}" >/dev/null; adopt_existing_container_data_root; printf "%s" "${DATA_ROOT}"',
+        "deployment-mount-test",
+        script,
+      ],
+      {
+        cwd: root,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH}`,
+          REQUEST_MANAGER_DATA_ROOT: "",
+        },
+      },
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain(legacyData);
   });
 });
 

@@ -23,6 +23,8 @@ Ubuntu 后台自动更新占用 `dpkg` 时，脚本会让 APT 原子等待最多
 | `request-manager:<Git SHA>` | 按 Git 修订构建的镜像 |
 | `request-manager` | 唯一应用容器 |
 
+新安装默认使用上述布局。若服务器已有名为 `request-manager` 的旧容器，脚本会读取该容器 `/app/data` 的真实 bind mount，并继续使用原数据目录，避免把旧数据误判为空库。显式设置 `REQUEST_MANAGER_DATA_ROOT` 时，其值必须与现有容器挂载一致，否则脚本拒绝部署；容器卷、符号链接或不安全路径也会被拒绝。
+
 脚本默认发布 `13001`，UFW 已启用时加入对应 TCP 规则。可用 `--port` 修改端口、用 `--no-firewall` 跳过规则。`--origin` 必须是浏览器实际使用的 Origin；若以后使用 HTTPS 反向代理，应传入 HTTPS 地址，并按受控代理边界设置 `TRUST_PROXY_HEADERS`，不要关闭同源检查。
 
 更新仍执行相同 `deploy --origin http://SERVER_IP:13001` 命令。流程严格为构建新镜像、使用旧容器在线备份、停旧容器、清理已停止进程遗留的普通锁文件、迁移、启动和健康检查。运行中的容器或非普通锁文件不会被绕过。失败时脚本使用旧镜像与升级前备份自动回滚；自动回滚也失败时保留备份并返回非零状态。
@@ -44,7 +46,7 @@ Ubuntu 后台自动更新占用 `dpkg` 时，脚本会让 APT 原子等待最多
 
 可增加 `--ssh-port`、`--port` 和 `--origin`。SSH 使用系统主机密钥校验，不保存密码或私钥，并通过仅存在于临时目录的 OpenSSH ControlMaster 套接字复用本次同步连接；密码登录只认证一次，同步结束立即关闭连接并清理套接字。同步先调用 `npm run ops:backup` 生成 SQLite、截图和 manifest 的一致性目录，并从已推送的当前提交生成 Git bundle。代码包和数据包都通过 `scp` 上传，因此服务器部署阶段不依赖服务器直连 GitHub；服务器仍保留规范 GitHub Origin，普通 `deploy` 命令继续从该 Origin 更新。远端先使用代码包构建相同修订，再备份当前数据，停服后使用 `ops:restore` 校验哈希、SQLite integrity、外键和迁移 journal，并在恢复后运行截图一致性检查与登录页健康检查。
 
-同步方向永远是“当前电脑覆盖服务器”，不是双向合并。交互执行必须输入 `yes`；自动化必须显式设置 `REQUEST_MANAGER_SYNC_CONFIRM=yes`。上传、校验或恢复失败会返回非零；恢复后验证失败则使用同步前保护备份恢复远端数据。
+同步方向永远是“当前电脑覆盖服务器”，不是双向合并。交互执行必须输入 `yes`；自动化必须显式设置 `REQUEST_MANAGER_SYNC_CONFIRM=yes`。上传、校验或恢复失败会返回非零。恢复完成后，脚本会在应用仍停止时逐字节比对正式 SQLite 与上传快照，再启动应用并检查登录页和截图一致性；任何一步失败都会使用同步前保护备份恢复远端数据。
 
 ## 运行约束
 

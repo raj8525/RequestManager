@@ -13,6 +13,8 @@ readonly APT_LOCK_TIMEOUT="${REQUEST_MANAGER_APT_LOCK_TIMEOUT:-600}"
 
 INSTALL_ROOT="${REQUEST_MANAGER_INSTALL_ROOT:-/opt/request-manager}"
 DATA_ROOT="${REQUEST_MANAGER_DATA_ROOT:-/var/lib/request-manager}"
+DATA_ROOT_CONFIGURED="false"
+[[ -z "${REQUEST_MANAGER_DATA_ROOT:-}" ]] || DATA_ROOT_CONFIGURED="true"
 CONFIG_ROOT="${REQUEST_MANAGER_CONFIG_ROOT:-/etc/request-manager}"
 OS_RELEASE_FILE="${REQUEST_MANAGER_OS_RELEASE_FILE:-/etc/os-release}"
 COMMAND_LOG="${REQUEST_MANAGER_COMMAND_LOG:-}"
@@ -295,6 +297,24 @@ container_running() {
   [[ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER_NAME}" 2>/dev/null || true)" == "true" ]]
 }
 
+adopt_existing_container_data_root() {
+  container_exists || return 0
+  local mount_spec
+  mount_spec="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/app/data"}}{{printf "%s|%s" .Type .Source}}{{end}}{{end}}' "${CONTAINER_NAME}")"
+  [[ "${mount_spec}" == bind\|/* && "${mount_spec#*|}" != *"|"* ]] || die "existing application container must use one bind mount for /app/data"
+  local mounted_data_root="${mount_spec#*|}"
+  [[ "${mounted_data_root}" =~ ^/[A-Za-z0-9._/-]+$ ]] || die "existing application data path is unsafe"
+  assert_no_symlink_components "${mounted_data_root}"
+  [[ -d "${mounted_data_root}" && ! -L "${mounted_data_root}" ]] || die "existing application data path is not a regular directory"
+  if [[ "${DATA_ROOT_CONFIGURED}" == "true" && "${DATA_ROOT}" != "${mounted_data_root}" ]]; then
+    die "configured data root does not match the existing application container"
+  fi
+  if [[ "${DATA_ROOT}" != "${mounted_data_root}" ]]; then
+    log "Adopting existing application data path: ${mounted_data_root}"
+    DATA_ROOT="${mounted_data_root}"
+  fi
+}
+
 clear_stopped_database_lock() {
   local lock_path="${DATA_ROOT}/request-manager.db.process-lock"
   [[ -e "${lock_path}" ]] || return 0
@@ -419,6 +439,7 @@ deploy_server() {
   local source_bundle="${7:-}"
 
   ensure_server_dependencies
+  adopt_existing_container_data_root
   ensure_checkout "${repository}" "${revision}" "${source_bundle}"
   build_revision_image
   prepare_server_paths
@@ -599,6 +620,7 @@ receive_uploaded_backup() {
   local port="$2"
   require_root
   validate_port "${port}"
+  adopt_existing_container_data_root
   [[ "${source_path}" =~ ^/[A-Za-z0-9._/-]+/\.request-manager-sync/request-manager-[A-Za-z0-9._-]+$ ]] || die "unsafe uploaded backup path"
   [[ -d "${source_path}" && ! -L "${source_path}" ]] || die "uploaded backup is not a regular directory"
   [[ -z "$(find "${source_path}" -type l -print -quit)" ]] || die "uploaded backup must not contain symbolic links"
@@ -609,6 +631,8 @@ receive_uploaded_backup() {
   image="$(docker inspect -f '{{.Config.Image}}' "${CONTAINER_NAME}")"
   local protection_backup
   protection_backup="$(backup_running_service)"
+  local protection_container
+  protection_container="/app/data/backups/$(basename "${protection_backup}")"
   local incoming
   incoming="${DATA_ROOT}/incoming/$(basename "${source_path}")"
   [[ ! -e "${incoming}" ]] || die "incoming backup already exists"
@@ -624,12 +648,16 @@ receive_uploaded_backup() {
     run docker start "${CONTAINER_NAME}" >/dev/null
     die "uploaded backup validation or restore failed; original service restarted"
   fi
+  if ! run cmp -s "${DATA_ROOT}/request-manager.db" "${incoming}/database.sqlite"; then
+    one_shot "${image}" npm run ops:restore -- "${protection_container}" --confirm-restore --app-stopped
+    run docker start "${CONTAINER_NAME}" >/dev/null
+    wait_for_health "${port}" || true
+    die "restored database did not exactly match the uploaded snapshot; previous remote data was restored"
+  fi
   run docker start "${CONTAINER_NAME}" >/dev/null
   if ! wait_for_health "${port}" || ! run docker exec "${CONTAINER_NAME}" npm run ops:attachments:check; then
     run docker stop "${CONTAINER_NAME}" >/dev/null 2>&1 || true
     clear_stopped_database_lock
-    local protection_container
-    protection_container="/app/data/backups/$(basename "${protection_backup}")"
     one_shot "${image}" npm run ops:restore -- "${protection_container}" --confirm-restore --app-stopped
     run docker start "${CONTAINER_NAME}" >/dev/null
     wait_for_health "${port}" || true

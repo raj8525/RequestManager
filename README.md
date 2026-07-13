@@ -28,7 +28,7 @@ curl -fsSL https://raw.githubusercontent.com/raj8525/RequestManager/main/scripts
 ./scripts/deploy-ubuntu.sh sync root@SERVER_IP
 ```
 
-这会通过 SSH 上传当前 Git 修订的代码包，并使用应用备份机制同步 SQLite、截图和校验清单，覆盖服务器的全部 RequestManager 数据。同步部署不要求服务器能够直连 GitHub，并会在本次同步中复用同一个 SSH 连接，密码登录只需完成一次认证。脚本显示源、目标和 Git 修订号后，必须输入 `yes`；远端覆盖前还会创建保护备份。不要直接上传运行中的 `.db`、`-wal` 或 `-shm` 文件。
+这会通过 SSH 上传当前 Git 修订的代码包，并使用应用备份机制同步 SQLite、截图和校验清单，覆盖服务器的全部 RequestManager 数据。同步部署不要求服务器能够直连 GitHub，并会在本次同步中复用同一个 SSH 连接，密码登录只需完成一次认证。脚本显示源、目标和 Git 修订号后，必须输入 `yes`；远端覆盖前还会创建保护备份，恢复后会在启动前精确比对数据库快照。不要直接上传运行中的 `.db`、`-wal` 或 `-shm` 文件。
 
 服务器状态和日志：
 
@@ -68,7 +68,7 @@ npm start
 
 SQLite 只支持一个 RequestManager Node.js 进程。不要以 Serverless 或多实例方式运行，也不要让其他 SQLite 工具在应用运行时写同一数据库。
 
-Ubuntu 生产服务器默认把代码放在 `/opt/request-manager`，把 SQLite、截图和备份持久化在 `/var/lib/request-manager`。容器删除或重建不会删除这些数据。
+Ubuntu 生产服务器默认把代码放在 `/opt/request-manager`，把 SQLite、截图和备份持久化在 `/var/lib/request-manager`。容器删除或重建不会删除这些数据；已有部署使用其他 bind mount 数据目录时，脚本会自动识别并沿用，不会误建空库。
 
 ## 常用命令
 
