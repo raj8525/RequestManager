@@ -1,0 +1,17 @@
+.git
+.github
+.next
+.env*
+data
+node_modules
+coverage
+output
+test-results
+playwright-report
+.playwright-cli
+*.db-wal
+*.db-shm
+*.partial
+*.log
+.DS_Store
+npm-debug.log*
