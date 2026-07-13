@@ -140,6 +140,13 @@ describe("deployment safety contract", () => {
     expect(body).not.toContain("request-manager.db-wal");
   });
 
+  test("sync staging avoids symlinked system temporary directories", () => {
+    expect(source).toContain(
+      'mktemp -d "${HOME}/.request-manager-sync.XXXXXX"',
+    );
+    expect(source).not.toContain('${TMPDIR:-/tmp}/request-manager-sync');
+  });
+
   test("never disables SSH host-key verification or evaluates generated text", () => {
     expect(source).not.toContain("StrictHostKeyChecking=no");
     expect(source).not.toMatch(/\beval\b/);

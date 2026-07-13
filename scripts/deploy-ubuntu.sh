@@ -484,7 +484,8 @@ sync_to_server() {
   git -C "${repository_root}" branch -r --contains "${revision}" | grep -q . || die "local revision has not been pushed to origin"
 
   local temporary_root
-  temporary_root="$(mktemp -d "${TMPDIR:-/tmp}/request-manager-sync.XXXXXX")"
+  [[ -n "${HOME:-}" && -d "${HOME}" ]] || die "HOME must be a writable directory for synchronization staging"
+  temporary_root="$(mktemp -d "${HOME}/.request-manager-sync.XXXXXX")"
   cleanup_sync_temp() {
     if [[ -n "${temporary_root:-}" && "${temporary_root}" == *request-manager-sync.* && -d "${temporary_root}" ]]; then
       find "${temporary_root}" -depth -delete
