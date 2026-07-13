@@ -1,5 +1,49 @@
 # 运维手册
 
+## Ubuntu Docker 一键部署
+
+支持 Docker Engine 官方仓库仍支持的 Ubuntu LTS `amd64` 和 `arm64`。服务器进入 root Shell 后运行：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/raj8525/RequestManager/main/scripts/deploy-ubuntu.sh \
+  | bash -s -- deploy --origin http://SERVER_IP:13001
+```
+
+首次部署会通过 `/dev/tty` 隐藏读取首个开发者密码，不把密码写入环境文件或日志。无交互自动化可以临时提供 `REQUEST_MANAGER_ADMIN_PASSWORD`，命令结束后应立即清除。GitHub 公开仓库不需要 Token；脚本不接受带凭据的仓库 URL。
+
+固定布局：
+
+| 路径 | 用途 |
+| --- | --- |
+| `/opt/request-manager` | Git 工作副本和部署脚本 |
+| `/var/lib/request-manager` | SQLite、截图、临时文件、完整备份和 incoming 数据 |
+| `/etc/request-manager/request-manager.env` | 权限为 `0600` 的容器运行配置，不含密码 |
+| `request-manager:<Git SHA>` | 按 Git 修订构建的镜像 |
+| `request-manager` | 唯一应用容器 |
+
+脚本默认发布 `13001`，UFW 已启用时加入对应 TCP 规则。可用 `--port` 修改端口、用 `--no-firewall` 跳过规则。`--origin` 必须是浏览器实际使用的 Origin；若以后使用 HTTPS 反向代理，应传入 HTTPS 地址，并按受控代理边界设置 `TRUST_PROXY_HEADERS`，不要关闭同源检查。
+
+更新仍执行相同 `deploy --origin http://SERVER_IP:13001` 命令。流程严格为构建新镜像、使用旧容器在线备份、停旧容器、迁移、启动和健康检查。失败时脚本使用旧镜像与升级前备份自动回滚；自动回滚也失败时保留备份并返回非零状态。
+
+查看状态和日志：
+
+```bash
+/opt/request-manager/scripts/deploy-ubuntu.sh status
+/opt/request-manager/scripts/deploy-ubuntu.sh logs
+```
+
+## 从原电脑同步全部数据
+
+在持有正式数据的原电脑仓库目录运行：
+
+```bash
+./scripts/deploy-ubuntu.sh sync root@SERVER_IP
+```
+
+可增加 `--ssh-port`、`--port` 和 `--origin`。SSH 使用系统主机密钥校验，不保存密码或私钥。同步先调用 `npm run ops:backup` 生成 SQLite、截图和 manifest 的一致性目录，让远端对齐同一 Git 修订，再通过 `scp` 上传。远端先备份当前数据，停服后使用 `ops:restore` 校验哈希、SQLite integrity、外键和迁移 journal，并在恢复后运行截图一致性检查与登录页健康检查。
+
+同步方向永远是“当前电脑覆盖服务器”，不是双向合并。交互执行必须输入 `yes`；自动化必须显式设置 `REQUEST_MANAGER_SYNC_CONFIRM=yes`。上传、校验或恢复失败会返回非零；恢复后验证失败则使用同步前保护备份恢复远端数据。
+
 ## 运行约束
 
 - 使用 Node.js 24 和一个 RequestManager 进程。

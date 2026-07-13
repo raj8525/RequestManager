@@ -325,9 +325,9 @@ backup_existing_service() {
 initialize_admin() {
   local image="$1"
   local password="${REQUEST_MANAGER_ADMIN_PASSWORD:-}"
-  if [[ -z "${password}" && -t 0 ]]; then
-    read -r -s -p "First developer password (10-128 characters): " password
-    printf '\n'
+  if [[ -z "${password}" && -r /dev/tty && -w /dev/tty ]]; then
+    read -r -s -p "First developer password (10-128 characters): " password </dev/tty
+    printf '\n' >/dev/tty
   fi
   [[ -n "${password}" ]] || { printf 'Error: set REQUEST_MANAGER_ADMIN_PASSWORD for non-interactive first deployment\n' >&2; return 1; }
   [[ "${password}" != *$'\n'* ]] || { printf 'Error: administrator password must not contain a newline\n' >&2; return 1; }

@@ -2,6 +2,41 @@
 
 RequestManager 是一个本地部署的用户需求管理工具。客户提交需求、Bug 和截图，开发者排期、备注、澄清并维护自己的私人笔记。应用使用 Next.js 单体架构和本地 SQLite，不依赖外部数据库或对象存储。
 
+## Ubuntu 一键部署
+
+在服务器进入 root Shell 后执行。脚本会从 GitHub 克隆代码、安装 Docker、构建镜像、迁移数据库，并隐藏提示输入首个开发者密码：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/raj8525/RequestManager/main/scripts/deploy-ubuntu.sh \
+  | bash -s -- deploy --origin http://SERVER_IP:13001
+```
+
+部署完成后访问 `http://SERVER_IP:13001`。实际服务器示例：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/raj8525/RequestManager/main/scripts/deploy-ubuntu.sh \
+  | bash -s -- deploy --origin http://47.121.188.131:13001
+```
+
+更新版本时重复执行相同命令。脚本先用旧版本创建完整备份，构建成功后才停服；迁移或健康检查失败会尝试恢复旧数据和旧镜像。
+
+## 完整数据同步
+
+在保存着正式 SQLite 和截图的原电脑、RequestManager 仓库目录中执行：
+
+```bash
+./scripts/deploy-ubuntu.sh sync root@SERVER_IP
+```
+
+这会使用应用备份机制同步 SQLite、截图和校验清单，并覆盖服务器的全部 RequestManager 数据。脚本显示源、目标和 Git 修订号后，必须输入 `yes`；远端覆盖前还会创建保护备份。不要直接上传运行中的 `.db`、`-wal` 或 `-shm` 文件。
+
+服务器状态和日志：
+
+```bash
+/opt/request-manager/scripts/deploy-ubuntu.sh status
+/opt/request-manager/scripts/deploy-ubuntu.sh logs
+```
+
 ## 五分钟启动
 
 要求 Node.js 24 和 npm。
@@ -32,6 +67,8 @@ npm start
 ```
 
 SQLite 只支持一个 RequestManager Node.js 进程。不要以 Serverless 或多实例方式运行，也不要让其他 SQLite 工具在应用运行时写同一数据库。
+
+Ubuntu 生产服务器默认把代码放在 `/opt/request-manager`，把 SQLite、截图和备份持久化在 `/var/lib/request-manager`。容器删除或重建不会删除这些数据。
 
 ## 常用命令
 

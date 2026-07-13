@@ -22,6 +22,8 @@
 | `OPS-01` | 显式迁移和首开发者初始化 | `src/db/migrate.ts`、`src/ops/bootstrap.ts`、`scripts` | `tests/integration/ops/bootstrap.test.ts` |
 | `OPS-02` | 一致性备份、停服恢复、迁移兼容和进程锁 | `src/ops/backup.ts`、`manifest.ts`、`process-lock.ts` | `tests/integration/ops/backup-restore.test.ts`、`tests/unit/ops` |
 | `OPS-03` | 截图只读检查和仅孤儿修复 | `src/ops/attachment-integrity.ts` | `tests/integration/ops/attachment-check.test.ts` |
+| `OPS-04` | Ubuntu 从 GitHub 一键 Docker 部署、升级前备份和失败回滚 | `Dockerfile`、`scripts/deploy-ubuntu.sh` | `tests/deployment/container-contract.test.ts`、`deploy-ubuntu.test.ts`、真实 Docker 烟测 |
+| `OPS-05` | SQLite、截图和校验清单完整上传，远端保护备份与原子恢复 | `scripts/deploy-ubuntu.sh`、`src/ops/backup.ts` | `tests/deployment/deploy-ubuntu.test.ts`、`tests/integration/ops/backup-restore.test.ts` |
 | `UX-01` | 中文、紧凑、桌面/移动响应式、无颜色单一提示 | `src/app/globals.css`、`src/components` | `tests/components`、`e2e/responsive.spec.ts` |
 | `UX-02` | 搜索、筛选、稳定排序、分页 | `request-toolbar.tsx`、`queries.ts`、`pagination.tsx` | `tests/unit/requests/sorting.test.ts`、`tests/components/pagination.test.tsx` |
 | `SEC-01` | 服务端权限、同源、IDOR 防护 | `src/auth`、各领域服务和 API | `tests/unit/lib/csrf.test.ts`、`e2e/access-control.spec.ts` |

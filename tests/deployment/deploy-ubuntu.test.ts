@@ -145,3 +145,17 @@ describe("deployment safety contract", () => {
     expect(source).not.toMatch(/\beval\b/);
   });
 });
+
+describe("deployment documentation contract", () => {
+  test("operator docs expose the same deployment and sync commands", () => {
+    for (const path of ["README.md", "docs/operations.md"]) {
+      const text = readFileSync(resolve(root, path), "utf8");
+
+      expect(text).toContain("deploy --origin http://SERVER_IP:13001");
+      expect(text).toContain(
+        "./scripts/deploy-ubuntu.sh sync root@SERVER_IP",
+      );
+      expect(text).toContain("/var/lib/request-manager");
+    }
+  });
+});
