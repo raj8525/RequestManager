@@ -214,6 +214,42 @@ describe("consistent backup and stopped restore", () => {
     expect(existsSync(join(paths.uploadsPath, "live-only-file"))).toBe(false);
   });
 
+  it("checkpoints valid WAL sidecars left behind by a stopped container", async () => {
+    const paths = isolatedPaths();
+    await seed(paths);
+    const backup = await createBackup({
+      databasePath: paths.databasePath,
+      uploadsPath: paths.uploadsPath,
+      backupRoot: paths.backupRoot,
+      now: NOW,
+    });
+
+    const live = createDatabase(paths.databasePath);
+    live.db.update(requests).set({ content: "committed in WAL" }).run();
+    const walBytes = readFileSync(`${paths.databasePath}-wal`);
+    const shmBytes = readFileSync(`${paths.databasePath}-shm`);
+    closeDatabase(live);
+    writeFileSync(`${paths.databasePath}-wal`, walBytes);
+    writeFileSync(`${paths.databasePath}-shm`, shmBytes);
+
+    await restoreBackup({
+      backupPath: backup.backupPath,
+      databasePath: paths.databasePath,
+      uploadsPath: paths.uploadsPath,
+      confirmed: true,
+      applicationStopped: true,
+    });
+
+    const restored = createDatabase(paths.databasePath);
+    try {
+      expect(restored.db.select().from(requests).get()?.content).toBe(
+        "content captured by backup",
+      );
+    } finally {
+      closeDatabase(restored);
+    }
+  });
+
   it("requires confirmation and stopped-app acknowledgement", async () => {
     const paths = isolatedPaths();
     await seed(paths);

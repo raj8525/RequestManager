@@ -272,13 +272,38 @@ export async function createBackup(options: CreateBackupOptions): Promise<{
   }
 }
 
-function assertStoppedDatabase(databasePath: string): void {
-  for (const suffix of ["-wal", "-shm"]) {
-    if (existsSync(`${databasePath}${suffix}`)) {
-      throw new Error(
-        "application must be stopped cleanly and SQLite WAL checkpointed before restore",
-      );
+function checkpointStoppedDatabase(databasePath: string): void {
+  const sidecarPaths = ["-wal", "-shm"].map(
+    (suffix) => `${databasePath}${suffix}`,
+  );
+  if (!sidecarPaths.some((path) => existsSync(path))) return;
+  for (const path of sidecarPaths) {
+    if (!existsSync(path)) continue;
+    const stats = lstatSync(path);
+    if (stats.isSymbolicLink() || !stats.isFile()) {
+      throw new Error("SQLite sidecars must be regular files before restore");
     }
+  }
+
+  const sqlite = new Database(databasePath, { fileMustExist: true });
+  try {
+    sqlite.pragma("busy_timeout = 5000");
+    const [result] = sqlite.pragma("wal_checkpoint(TRUNCATE)") as Array<{
+      busy: number;
+      checkpointed: number;
+      log: number;
+    }>;
+    if (!result || result.busy !== 0) {
+      throw new Error("SQLite WAL is still in use by another process");
+    }
+  } finally {
+    sqlite.close();
+  }
+
+  if (sidecarPaths.some((path) => existsSync(path))) {
+    throw new Error(
+      "application must be stopped cleanly before restore",
+    );
   }
 }
 
@@ -319,7 +344,7 @@ export async function restoreBackup(options: RestoreBackupOptions): Promise<Back
   assertIndependentPaths(databasePath, "database file", uploadsPath, "uploads directory");
   const restoreLock = acquireDatabaseProcessLock(databasePath, "restore");
   try {
-    assertStoppedDatabase(databasePath);
+    checkpointStoppedDatabase(databasePath);
     const manifest = await verifyBackup(backupPath);
 
     mkdirManaged(dirname(databasePath));

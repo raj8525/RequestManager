@@ -100,14 +100,14 @@ npm run ops:backup
 
 1. 找到与当前应用迁移集匹配的完整备份目录。
 2. 停止 RequestManager，确认没有直接写 SQLite 的其他工具。
-3. 确认数据库旁没有活动的 `-wal` 或 `-shm` 文件。
+3. 确认应用已完全停止。恢复命令会在持有进程锁后 checkpoint 合法的遗留 WAL；若 sidecar 不是普通文件、仍被其他进程使用或无法安全清理，则拒绝恢复。
 4. 执行：
 
 ```bash
 npm run ops:restore -- data/backups/<备份目录> --confirm-restore --app-stopped
 ```
 
-恢复会验证 manifest 文件集合、大小、SHA-256、SQLite integrity、外键和有序迁移 journal。随后在数据路径旁暂存数据库和截图，原子交换；失败时回滚到原路径。缺少任一确认参数、应用进程锁仍被占用、备份属于不同迁移集或路径不安全时都会拒绝恢复。
+恢复会验证 manifest 文件集合、大小、SHA-256、SQLite integrity、外键和有序迁移 journal。停止后的容器若遗留有效 WAL/SHM，恢复会先执行带 busy 检查的 checkpoint，再在数据路径旁暂存数据库和截图并原子交换；失败时回滚到原路径。缺少任一确认参数、应用进程锁仍被占用、SQLite sidecar 仍在使用、备份属于不同迁移集或路径不安全时都会拒绝恢复。
 
 恢复后重新启动应用，登录并打开一条带截图的需求做抽查。
 
