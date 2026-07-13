@@ -28,7 +28,7 @@ curl -fsSL https://raw.githubusercontent.com/raj8525/RequestManager/main/scripts
 ./scripts/deploy-ubuntu.sh sync root@SERVER_IP
 ```
 
-这会使用应用备份机制同步 SQLite、截图和校验清单，并覆盖服务器的全部 RequestManager 数据。脚本显示源、目标和 Git 修订号后，必须输入 `yes`；远端覆盖前还会创建保护备份。不要直接上传运行中的 `.db`、`-wal` 或 `-shm` 文件。
+这会通过 SSH 上传当前 Git 修订的代码包，并使用应用备份机制同步 SQLite、截图和校验清单，覆盖服务器的全部 RequestManager 数据。同步部署不要求服务器能够直连 GitHub。脚本显示源、目标和 Git 修订号后，必须输入 `yes`；远端覆盖前还会创建保护备份。不要直接上传运行中的 `.db`、`-wal` 或 `-shm` 文件。
 
 服务器状态和日志：
 

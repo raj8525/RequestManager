@@ -212,9 +212,16 @@ apt_get() {
 ensure_checkout() {
   local repository="$1"
   local revision="$2"
+  local source_bundle="${3:-}"
   assert_no_symlink_components "${INSTALL_ROOT}"
   if [[ ! -e "${INSTALL_ROOT}" ]]; then
-    run git clone "${repository}" "${INSTALL_ROOT}"
+    if [[ -n "${source_bundle}" ]]; then
+      run install -d -m 0755 "${INSTALL_ROOT}"
+      run git -C "${INSTALL_ROOT}" init
+      run git -C "${INSTALL_ROOT}" remote add origin "${repository}"
+    else
+      run git clone "${repository}" "${INSTALL_ROOT}"
+    fi
   fi
   [[ -d "${INSTALL_ROOT}/.git" && ! -L "${INSTALL_ROOT}/.git" ]] || die "install root is not a Git checkout"
   local actual_origin
@@ -232,7 +239,13 @@ ensure_checkout() {
     fi
   fi
   [[ -z "${checkout_status}" ]] || die "install checkout has local changes"
-  run git -C "${INSTALL_ROOT}" fetch --force --depth 1 origin "${revision}"
+  if [[ -n "${source_bundle}" ]]; then
+    [[ -f "${source_bundle}" && ! -L "${source_bundle}" ]] || die "uploaded Git bundle is not a regular file"
+    run git -C "${INSTALL_ROOT}" bundle verify "${source_bundle}"
+    run git -C "${INSTALL_ROOT}" fetch --force "${source_bundle}" "${revision}"
+  else
+    run git -C "${INSTALL_ROOT}" fetch --force --depth 1 origin "${revision}"
+  fi
   run git -C "${INSTALL_ROOT}" checkout --detach FETCH_HEAD
 }
 
@@ -402,9 +415,10 @@ deploy_server() {
   local repository="$4"
   local skip_admin="$5"
   local configure_firewall="$6"
+  local source_bundle="${7:-}"
 
   ensure_server_dependencies
-  ensure_checkout "${repository}" "${revision}"
+  ensure_checkout "${repository}" "${revision}" "${source_bundle}"
   build_revision_image
   prepare_server_paths
 
@@ -486,13 +500,14 @@ remote_root_script() {
   ssh -p "${ssh_port}" "${target}" "${remote_command}" <"${BASH_SOURCE[0]}"
 }
 
-remote_deploy() {
+remote_deploy_bundle() {
   local target="$1"
   local ssh_port="$2"
   local revision="$3"
   local origin="$4"
   local port="$5"
-  remote_root_script "${target}" "${ssh_port}" deploy --revision "${revision}" --origin "${origin}" --port "${port}" --skip-admin
+  local source_bundle="$6"
+  remote_root_script "${target}" "${ssh_port}" __deploy-bundle "${source_bundle}" "${revision}" "${origin}" "${port}"
 }
 
 sync_to_server() {
@@ -526,15 +541,22 @@ sync_to_server() {
   local backup="${backups[0]}"
   confirm_sync "${target}" "${revision}" "${backup}"
 
-  remote_deploy "${target}" "${ssh_port}" "${revision}" "${origin}" "${port}"
+  local source_bundle="${temporary_root}/request-manager-${revision}.bundle"
+  run git -C "${repository_root}" bundle create "${source_bundle}" HEAD
   local remote_home
   record_command ssh -p "${ssh_port}" "${target}" pwd
   remote_home="$(ssh -p "${ssh_port}" "${target}" pwd)"
   [[ "${remote_home}" =~ ^/[A-Za-z0-9._/-]+$ ]] || die "remote home path is unsafe"
+  run ssh -p "${ssh_port}" "${target}" mkdir -p .request-manager-sync
+  local remote_bundle
+  remote_bundle="${remote_home}/.request-manager-sync/$(basename "${source_bundle}")-$(date +%s)-$$"
+  record_command scp -P "${ssh_port}" -- "${source_bundle}" "${target}:${remote_bundle}"
+  scp -P "${ssh_port}" -- "${source_bundle}" "${target}:${remote_bundle}"
+  remote_deploy_bundle "${target}" "${ssh_port}" "${revision}" "${origin}" "${port}" "${remote_bundle}"
+
   local remote_name
   remote_name="$(basename "${backup}")-$(date +%s)-$$"
   local remote_path="${remote_home}/.request-manager-sync/${remote_name}"
-  run ssh -p "${ssh_port}" "${target}" mkdir -p .request-manager-sync
   record_command scp -P "${ssh_port}" -r -- "${backup}" "${target}:${remote_path}"
   scp -P "${ssh_port}" -r -- "${backup}" "${target}:${remote_path}"
   remote_root_script "${target}" "${ssh_port}" __receive-backup "${remote_path}" "${port}"
@@ -588,6 +610,24 @@ receive_uploaded_backup() {
   rm -f -- "${CONFIG_ROOT}/needs-admin"
 }
 
+deploy_uploaded_bundle() {
+  local source_bundle="$1"
+  local revision="$2"
+  local origin="$3"
+  local port="$4"
+  require_root
+  validate_revision "${revision}"
+  validate_origin "${origin}"
+  validate_port "${port}"
+  [[ "${source_bundle}" =~ ^/[A-Za-z0-9._/-]+/\.request-manager-sync/request-manager-[A-Fa-f0-9]+\.bundle-[0-9]+-[0-9]+$ ]] || die "unsafe uploaded Git bundle path"
+  [[ -f "${source_bundle}" && ! -L "${source_bundle}" ]] || die "uploaded Git bundle is not a regular file"
+  load_ubuntu
+  trap 'rm -f -- "${source_bundle}"' EXIT
+  deploy_server "${origin}" "${port}" "${revision}" "${DEFAULT_REPO}" true true "${source_bundle}"
+  rm -f -- "${source_bundle}"
+  trap - EXIT
+}
+
 main() {
   local command="${1:---help}"
   [[ $# == 0 ]] || shift
@@ -597,6 +637,7 @@ main() {
     sync) command_sync "$@" ;;
     status) command_status "$@" ;;
     logs) command_logs "$@" ;;
+    __deploy-bundle) (($# == 4)) || die "invalid remote bundle deployment arguments"; deploy_uploaded_bundle "$1" "$2" "$3" "$4" ;;
     __receive-backup) (($# == 2)) || die "invalid remote restore arguments"; receive_uploaded_backup "$1" "$2" ;;
     *) usage >&2; die "unknown command" ;;
   esac

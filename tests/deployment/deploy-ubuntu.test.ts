@@ -3,6 +3,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -155,10 +156,15 @@ describe("deployment safety contract", () => {
     const body = source.slice(source.indexOf("sync_to_server()"));
 
     expect(body.indexOf("npm run ops:backup")).toBeGreaterThanOrEqual(0);
-    expect(body.indexOf("remote_deploy")).toBeGreaterThan(
+    expect(body.indexOf("bundle create")).toBeGreaterThan(
       body.indexOf("npm run ops:backup"),
     );
-    expect(body.indexOf("scp")).toBeGreaterThan(body.indexOf("remote_deploy"));
+    expect(body.indexOf("remote_deploy_bundle")).toBeGreaterThan(
+      body.indexOf("bundle create"),
+    );
+    expect(body.indexOf("scp")).toBeGreaterThan(
+      body.indexOf("bundle create"),
+    );
     expect(body).not.toContain("request-manager.db-wal");
   });
 
@@ -261,6 +267,79 @@ exit 0
     expect(readFileSync(resolve(installRoot, "package.json"), "utf8")).toContain(
       '"private":true',
     );
+  });
+
+  test("updates an existing checkout from an uploaded bundle without reaching origin", () => {
+    const sandbox = mkdtempSync(resolve(root, "data/deploy-bundle-test-"));
+    temporaryDirectories.push(sandbox);
+    const sourceRepository = resolve(sandbox, "source");
+    const offlineRepository = resolve(sandbox, "source-offline");
+    const installRoot = resolve(sandbox, "install");
+    const bundle = resolve(sandbox, "request-manager.bundle");
+    mkdirSync(sourceRepository);
+    expect(
+      spawnSync("git", ["init", "-q", "-b", "main"], {
+        cwd: sourceRepository,
+      }).status,
+    ).toBe(0);
+    writeFileSync(resolve(sourceRepository, "package.json"), '{"private":true}\n');
+    expect(spawnSync("git", ["add", "package.json"], { cwd: sourceRepository }).status).toBe(0);
+    expect(
+      spawnSync(
+        "git",
+        ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "fixture"],
+        { cwd: sourceRepository },
+      ).status,
+    ).toBe(0);
+    const revision = spawnSync("git", ["rev-parse", "HEAD"], {
+      cwd: sourceRepository,
+      encoding: "utf8",
+    }).stdout.trim();
+    expect(
+      spawnSync("git", ["bundle", "create", bundle, "HEAD"], {
+        cwd: sourceRepository,
+      }).status,
+    ).toBe(0);
+    mkdirSync(installRoot);
+    expect(spawnSync("git", ["init", "-q"], { cwd: installRoot }).status).toBe(0);
+    expect(
+      spawnSync("git", ["remote", "add", "origin", sourceRepository], {
+        cwd: installRoot,
+      }).status,
+    ).toBe(0);
+    renameSync(sourceRepository, offlineRepository);
+
+    const result = spawnSync(
+      "bash",
+      [
+        "-c",
+        'deployment_script="$1"; repository="$2"; revision="$3"; bundle="$4"; set --; source "${deployment_script}" >/dev/null; ensure_checkout "${repository}" "${revision}" "${bundle}"',
+        "deployment-bundle-test",
+        script,
+        sourceRepository,
+        revision,
+        bundle,
+      ],
+      {
+        cwd: root,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          REQUEST_MANAGER_INSTALL_ROOT: installRoot,
+        },
+      },
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(readFileSync(resolve(installRoot, "package.json"), "utf8")).toContain(
+      '"private":true',
+    );
+    expect(
+      spawnSync("git", ["rev-parse", "HEAD"], {
+        cwd: installRoot,
+        encoding: "utf8",
+      }).stdout.trim(),
+    ).toBe(revision);
   });
 });
 

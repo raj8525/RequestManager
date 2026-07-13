@@ -42,7 +42,7 @@ Ubuntu 后台自动更新占用 `dpkg` 时，脚本会让 APT 原子等待最多
 ./scripts/deploy-ubuntu.sh sync root@SERVER_IP
 ```
 
-可增加 `--ssh-port`、`--port` 和 `--origin`。SSH 使用系统主机密钥校验，不保存密码或私钥。同步先调用 `npm run ops:backup` 生成 SQLite、截图和 manifest 的一致性目录，让远端对齐同一 Git 修订，再通过 `scp` 上传。远端先备份当前数据，停服后使用 `ops:restore` 校验哈希、SQLite integrity、外键和迁移 journal，并在恢复后运行截图一致性检查与登录页健康检查。
+可增加 `--ssh-port`、`--port` 和 `--origin`。SSH 使用系统主机密钥校验，不保存密码或私钥。同步先调用 `npm run ops:backup` 生成 SQLite、截图和 manifest 的一致性目录，并从已推送的当前提交生成 Git bundle。代码包和数据包都通过 `scp` 上传，因此服务器部署阶段不依赖服务器直连 GitHub；服务器仍保留规范 GitHub Origin，普通 `deploy` 命令继续从该 Origin 更新。远端先使用代码包构建相同修订，再备份当前数据，停服后使用 `ops:restore` 校验哈希、SQLite integrity、外键和迁移 journal，并在恢复后运行截图一致性检查与登录页健康检查。
 
 同步方向永远是“当前电脑覆盖服务器”，不是双向合并。交互执行必须输入 `yes`；自动化必须显式设置 `REQUEST_MANAGER_SYNC_CONFIRM=yes`。上传、校验或恢复失败会返回非零；恢复后验证失败则使用同步前保护备份恢复远端数据。
 
