@@ -175,6 +175,17 @@ describe("deployment safety contract", () => {
     expect(source).not.toContain('${TMPDIR:-/tmp}/request-manager-sync');
   });
 
+  test("sync reuses one authenticated SSH connection for every upload step", () => {
+    const body = source.slice(source.indexOf("sync_to_server()"));
+
+    expect(source).toContain("ControlMaster=auto");
+    expect(source).toContain("ControlPersist=60");
+    expect(body).toContain('SSH_CONTROL_PATH="${temporary_root}/ssh-%C"');
+    expect(body.indexOf("SSH_CONTROL_PATH=")).toBeLessThan(
+      body.indexOf("ssh_transport"),
+    );
+  });
+
   test("never disables SSH host-key verification or evaluates generated text", () => {
     expect(source).not.toContain("StrictHostKeyChecking=no");
     expect(source).not.toMatch(/\beval\b/);

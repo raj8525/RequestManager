@@ -19,6 +19,7 @@ COMMAND_LOG="${REQUEST_MANAGER_COMMAND_LOG:-}"
 EFFECTIVE_UID="${REQUEST_MANAGER_EFFECTIVE_UID:-${EUID}}"
 ENV_FILE="${CONFIG_ROOT}/request-manager.env"
 REVISION_FILE="${CONFIG_ROOT}/revision"
+SSH_CONTROL_PATH=""
 
 log() { printf '[RequestManager] %s\n' "$1"; }
 die() { printf 'Error: %s\n' "$1" >&2; exit 1; }
@@ -484,6 +485,27 @@ confirm_sync() {
   [[ "${answer}" == "yes" ]] || die "synchronization cancelled"
 }
 
+ssh_transport() {
+  local target="$1"
+  local ssh_port="$2"
+  shift 2
+  local options=(-p "${ssh_port}")
+  if [[ -n "${SSH_CONTROL_PATH}" ]]; then
+    options+=(-o ControlMaster=auto -o ControlPersist=60 -o "ControlPath=${SSH_CONTROL_PATH}")
+  fi
+  run ssh "${options[@]}" "${target}" "$@"
+}
+
+scp_transport() {
+  local ssh_port="$1"
+  shift
+  local options=(-P "${ssh_port}")
+  if [[ -n "${SSH_CONTROL_PATH}" ]]; then
+    options+=(-o ControlMaster=auto -o ControlPersist=60 -o "ControlPath=${SSH_CONTROL_PATH}")
+  fi
+  run scp "${options[@]}" "$@"
+}
+
 remote_root_script() {
   local target="$1"
   local ssh_port="$2"
@@ -496,8 +518,7 @@ remote_root_script() {
   done
   local remote_command
   remote_command="if [ \"\$(id -u)\" -eq 0 ]; then exec bash -s --${quoted_args}; else exec sudo bash -s --${quoted_args}; fi"
-  record_command ssh -p "${ssh_port}" "${target}" bash -s -- "$@"
-  ssh -p "${ssh_port}" "${target}" "${remote_command}" <"${BASH_SOURCE[0]}"
+  ssh_transport "${target}" "${ssh_port}" "${remote_command}" <"${BASH_SOURCE[0]}"
 }
 
 remote_deploy_bundle() {
@@ -528,7 +549,12 @@ sync_to_server() {
   local temporary_root
   [[ -n "${HOME:-}" && -d "${HOME}" ]] || die "HOME must be a writable directory for synchronization staging"
   temporary_root="$(mktemp -d "${HOME}/.request-manager-sync.XXXXXX")"
+  SSH_CONTROL_PATH="${temporary_root}/ssh-%C"
   cleanup_sync_temp() {
+    if [[ -n "${SSH_CONTROL_PATH:-}" ]]; then
+      ssh -p "${ssh_port}" -o "ControlPath=${SSH_CONTROL_PATH}" -O exit "${target}" >/dev/null 2>&1 || true
+      SSH_CONTROL_PATH=""
+    fi
     if [[ -n "${temporary_root:-}" && "${temporary_root}" == *request-manager-sync.* && -d "${temporary_root}" ]]; then
       find "${temporary_root}" -depth -delete
     fi
@@ -544,21 +570,18 @@ sync_to_server() {
   local source_bundle="${temporary_root}/request-manager-${revision}.bundle"
   run git -C "${repository_root}" bundle create "${source_bundle}" HEAD
   local remote_home
-  record_command ssh -p "${ssh_port}" "${target}" pwd
-  remote_home="$(ssh -p "${ssh_port}" "${target}" pwd)"
+  remote_home="$(ssh_transport "${target}" "${ssh_port}" pwd)"
   [[ "${remote_home}" =~ ^/[A-Za-z0-9._/-]+$ ]] || die "remote home path is unsafe"
-  run ssh -p "${ssh_port}" "${target}" mkdir -p .request-manager-sync
+  ssh_transport "${target}" "${ssh_port}" mkdir -p .request-manager-sync
   local remote_bundle
   remote_bundle="${remote_home}/.request-manager-sync/$(basename "${source_bundle}")-$(date +%s)-$$"
-  record_command scp -P "${ssh_port}" -- "${source_bundle}" "${target}:${remote_bundle}"
-  scp -P "${ssh_port}" -- "${source_bundle}" "${target}:${remote_bundle}"
+  scp_transport "${ssh_port}" -- "${source_bundle}" "${target}:${remote_bundle}"
   remote_deploy_bundle "${target}" "${ssh_port}" "${revision}" "${origin}" "${port}" "${remote_bundle}"
 
   local remote_name
   remote_name="$(basename "${backup}")-$(date +%s)-$$"
   local remote_path="${remote_home}/.request-manager-sync/${remote_name}"
-  record_command scp -P "${ssh_port}" -r -- "${backup}" "${target}:${remote_path}"
-  scp -P "${ssh_port}" -r -- "${backup}" "${target}:${remote_path}"
+  scp_transport "${ssh_port}" -r -- "${backup}" "${target}:${remote_path}"
   remote_root_script "${target}" "${ssh_port}" __receive-backup "${remote_path}" "${port}"
   cleanup_sync_temp
   trap - EXIT
