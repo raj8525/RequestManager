@@ -44,6 +44,22 @@ test("runs the customer and developer request lifecycle with simple clarificatio
   const requestNumber = page.url().match(/(REQ-\d+)$/)?.[1];
   expect(requestNumber).toBeTruthy();
 
+  await page.goto("/requests");
+  const createdRow = page.getByTestId(`request-row-${requestNumber}`);
+  const createdCells = createdRow.getByRole("cell");
+  await expect(createdCells.first().getByRole("link", { name: "编辑" })).toHaveCount(0);
+  await expect(createdCells.last().getByRole("link", { name: "编辑" })).toBeVisible();
+  const requestTable = createdRow.locator("xpath=ancestor::table");
+  await requestTable.getByRole("columnheader", { name: /更新时间/ }).getByRole("link").click();
+  await expect(page).toHaveURL(/sort=updatedAt&direction=desc/);
+  await expect(requestTable.getByRole("columnheader", { name: /更新时间/ })).toHaveAttribute(
+    "aria-sort",
+    "descending",
+  );
+  await requestTable.getByRole("columnheader", { name: /更新时间/ }).getByRole("link").click();
+  await expect(page).toHaveURL(/sort=updatedAt&direction=asc/);
+  await page.goto(`/requests/${requestNumber}`);
+
   await page.getByRole("button", { name: "放大查看 pasted-screenshot.png" }).click();
   const imagePreview = page.getByRole("dialog", { name: "截图预览" });
   await expect(imagePreview.getByAltText("pasted-screenshot.png")).toBeVisible();
@@ -85,7 +101,7 @@ test("runs the customer and developer request lifecycle with simple clarificatio
   const row = page.getByTestId(`request-row-${requestNumber}`);
   await expect(row).toHaveAttribute("data-attention", "customer-reply");
   await expect(row).toContainText("待您回复");
-  await expect(page.locator(".request-table tbody tr").first()).toHaveAttribute(
+  await expect(row.locator("xpath=ancestor::table").locator("tbody tr").first()).toHaveAttribute(
     "data-testid",
     `request-row-${requestNumber}`,
   );

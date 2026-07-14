@@ -17,6 +17,8 @@ export const accounts = {
 
 export type AccountName = keyof typeof accounts;
 
+let loginSourceSequence = 0;
+
 export async function fillHydrated(locator: Locator, value: string): Promise<void> {
   await expect
     .poll(() =>
@@ -33,6 +35,10 @@ export async function loginAs(
   account: AccountName,
   password = E2E_PASSWORD,
 ): Promise<void> {
+  loginSourceSequence += 1;
+  await page.setExtraHTTPHeaders({
+    "x-forwarded-for": `198.51.100.${loginSourceSequence}`,
+  });
   await page.waitForLoadState("networkidle").catch(() => undefined);
   await page.goto("about:blank");
   await page.context().clearCookies();

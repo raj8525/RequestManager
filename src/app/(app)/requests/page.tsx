@@ -23,6 +23,10 @@ import {
 } from "@/features/requests/components/request-toolbar";
 import { listRequests } from "@/features/requests/queries";
 import type { ListRequestsInput } from "@/features/requests/schemas";
+import {
+  requestSortDirections,
+  requestSortFields,
+} from "@/features/requests/schemas";
 
 export const metadata: Metadata = { title: "需求列表" };
 
@@ -62,6 +66,10 @@ export default async function RequestsPage({
     requestRecordStatuses,
     valueOf(raw, "recordStatus"),
   );
+  const sort = oneOf(requestSortFields, valueOf(raw, "sort"));
+  const direction = sort
+    ? oneOf(requestSortDirections, valueOf(raw, "direction"))
+    : undefined;
   const values: RequestFilterValues = {
     search: valueOf(raw, "search")?.trim() || undefined,
     projectId: Number.isSafeInteger(projectIdValue) && projectIdValue > 0
@@ -71,6 +79,8 @@ export default async function RequestsPage({
     priority,
     progressStatus,
     recordStatus,
+    sort,
+    direction,
   };
   const filters: ListRequestsInput = {
     ...(values.search ? { search: values.search } : {}),
@@ -79,6 +89,8 @@ export default async function RequestsPage({
     ...(priority ? { priority } : {}),
     ...(progressStatus ? { progressStatus } : {}),
     ...(recordStatus ? { recordStatus } : {}),
+    ...(sort ? { sort } : {}),
+    ...(direction ? { direction } : {}),
     page: Number.isSafeInteger(pageValue) && pageValue > 0 ? pageValue : 1,
     pageSize: 25,
   };
@@ -129,6 +141,9 @@ export default async function RequestsPage({
         role={actor.role}
         actorId={actor.id}
         items={requestResult.data.items}
+        sort={sort}
+        direction={direction}
+        searchParams={values}
       />
       <DeveloperQuestionList role={actor.role} items={visibleQuestions.filter((q) => !needsQuestionAttention(q.attentionStatus))} />
       <Pagination

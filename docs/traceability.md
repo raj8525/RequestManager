@@ -9,7 +9,7 @@
 | `PROJ-02` | 项目停用保留历史并阻止客户写入 | `src/features/projects/authorization.ts`、领域服务 | `tests/integration/projects`、`tests/integration/requests` |
 | `REQ-01` | 客户提交必填正文、类型、优先级 | `src/features/requests`、`src/app/api/requests` | `tests/integration/requests`、`e2e/request-lifecycle.spec.ts` |
 | `REQ-02` | 客户查看所属项目全部需求和提交人 | `src/features/requests/queries.ts` | `tests/unit/requests/sorting.test.ts`、`e2e/access-control.spec.ts` |
-| `REQ-03` | 本人正常未排期可编辑，已排期可暂停并另提新需求 | `src/features/requests/policy.ts`、`service.ts` | `tests/unit/requests/policy.test.ts`、`tests/integration/requests` |
+| `REQ-03` | 本人正常未排期可编辑，已排期可暂停并另提新需求 | `src/features/requests/policy.ts`、`service.ts`、`request-actions.tsx` | `tests/unit/requests/policy.test.ts`、`tests/components/request-detail.test.tsx`、`tests/integration/requests` |
 | `STATE-01` | 进度仅未排期、已排期、完成 | `src/db/schema.ts`、`src/features/requests/service.ts` | `tests/integration/requests`、`e2e/request-lifecycle.spec.ts` |
 | `STATE-02` | 记录状态正常、已暂停、已归档及恢复规则 | `src/features/requests/policy.ts`、`service.ts` | `tests/unit/requests/policy.test.ts`、`e2e/request-lifecycle.spec.ts` |
 | `COMM-01` | 客户可见公开备注 | `src/features/communication/components/public-remarks.tsx`、`service.ts` | `tests/integration/communication`、`e2e/request-lifecycle.spec.ts` |
@@ -25,7 +25,7 @@
 | `OPS-04` | Ubuntu 从 GitHub 一键 Docker 部署、升级前备份和失败回滚 | `Dockerfile`、`scripts/deploy-ubuntu.sh` | `tests/deployment/container-contract.test.ts`、`deploy-ubuntu.test.ts`、真实 Docker 烟测 |
 | `OPS-05` | SQLite、截图和校验清单完整上传，远端保护备份与原子恢复 | `scripts/deploy-ubuntu.sh`、`src/ops/backup.ts` | `tests/deployment/deploy-ubuntu.test.ts`、`tests/integration/ops/backup-restore.test.ts` |
 | `UX-01` | 中文、紧凑、桌面/移动响应式、无颜色单一提示 | `src/app/globals.css`、`src/components` | `tests/components`、`e2e/responsive.spec.ts` |
-| `UX-02` | 搜索、筛选、稳定排序、分页 | `request-toolbar.tsx`、`queries.ts`、`pagination.tsx` | `tests/unit/requests/sorting.test.ts`、`tests/components/pagination.test.tsx` |
+| `UX-02` | 搜索、筛选、可点击表头、业务顺序、稳定分页 | `request-toolbar.tsx`、`request-list.tsx`、`queries.ts`、`pagination.tsx` | `tests/unit/requests/sorting.test.ts`、`tests/components/request-list.test.tsx`、`e2e/request-lifecycle.spec.ts` |
 | `SEC-01` | 服务端权限、同源、IDOR 防护 | `src/auth`、各领域服务和 API | `tests/unit/lib/csrf.test.ts`、`e2e/access-control.spec.ts` |
 
 批准规格：`docs/superpowers/specs/2026-07-10-request-manager-design.md`。实施步骤和门禁：`docs/superpowers/plans/2026-07-10-request-manager-implementation.md`。

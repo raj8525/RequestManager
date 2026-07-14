@@ -63,7 +63,7 @@ export default defineConfig({
       LIVE_UPLOADS_PATH: liveUploadsPath,
       APP_ORIGIN: baseURL,
       SECURE_COOKIES: "false",
-      TRUST_PROXY_HEADERS: "false",
+      TRUST_PROXY_HEADERS: "true",
     },
   },
 });

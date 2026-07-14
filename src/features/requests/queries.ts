@@ -45,6 +45,8 @@ import {
   listRequestsSchema,
   requestDetailSchema,
   type ListRequestsInput,
+  type RequestSortDirection,
+  type RequestSortField,
 } from "./schemas";
 
 export type RequestListResult = {
@@ -204,6 +206,70 @@ const customerSortRank = sql<number>`case
   else 3
 end`;
 
+const progressSortRank = sql<number>`case ${requests.progressStatus}
+  when 'SCHEDULED' then 0
+  when 'UNSCHEDULED' then 1
+  when 'COMPLETED' then 2
+  else 3
+end`;
+const prioritySortRank = sql<number>`case ${requests.priority}
+  when 'URGENT' then 0
+  when 'IMPORTANT' then 1
+  when 'NORMAL' then 2
+  else 3
+end`;
+const typeSortRank = sql<number>`case ${requests.requestType}
+  when 'BUG' then 0
+  when 'CHANGE' then 1
+  when 'NEW_FEATURE' then 2
+  else 3
+end`;
+const recordSortRank = sql<number>`case ${requests.recordStatus}
+  when 'ACTIVE' then 0
+  when 'PAUSED' then 1
+  when 'ARCHIVED' then 2
+  else 3
+end`;
+
+function sortExpression(field: RequestSortField): SQL {
+  switch (field) {
+    case "requestNumber": return sql`${requests.id}`;
+    case "project": return sql`lower(${projects.name})`;
+    case "createdBy": return sql`lower(${users.displayName})`;
+    case "requestType": return typeSortRank;
+    case "priority": return prioritySortRank;
+    case "progressStatus": return progressSortRank;
+    case "recordStatus": return recordSortRank;
+    case "updatedAt": return sql`${requests.updatedAt}`;
+  }
+}
+
+function directed(expression: SQL, direction: RequestSortDirection): SQL {
+  return direction === "asc" ? asc(expression) : desc(expression);
+}
+
+function requestOrderBy(
+  role: AuthenticatedUser["role"],
+  filters: ReturnType<typeof listRequestsSchema.parse>,
+): SQL[] {
+  const prefix = role === "CUSTOMER" ? [customerSortRank] : [];
+  if (filters.sort) {
+    const direction = filters.direction ?? (filters.sort === "updatedAt" ? "desc" : "asc");
+    return [
+      ...prefix,
+      directed(sortExpression(filters.sort), direction),
+      directed(sql`${requests.id}`, direction),
+    ];
+  }
+  return [
+    ...prefix,
+    progressSortRank,
+    prioritySortRank,
+    desc(requests.updatedAt),
+    desc(requests.id),
+  ];
+}
+
 export function getRequestDetail(
   database: AppDatabase,
   actor: AuthenticatedUser,
@@ -317,7 +383,7 @@ export function listRequests(
       .innerJoin(projects, eq(projects.id, requests.projectId))
       .innerJoin(users, eq(users.id, requests.createdById))
       .where(where)
-      .orderBy(customerSortRank, desc(requests.updatedAt), desc(requests.id))
+      .orderBy(...requestOrderBy(live.actor.role, filters))
       .limit(filters.pageSize)
       .offset(offset)
       .all();
@@ -340,7 +406,7 @@ export function listRequests(
       .innerJoin(projects, eq(projects.id, requests.projectId))
       .innerJoin(users, eq(users.id, requests.createdById))
       .where(where)
-      .orderBy(desc(requests.updatedAt), desc(requests.id))
+      .orderBy(...requestOrderBy(live.actor.role, filters))
       .limit(filters.pageSize)
       .offset(offset)
       .all();

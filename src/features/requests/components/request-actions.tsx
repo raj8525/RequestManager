@@ -36,6 +36,8 @@ export function RequestActions({
     request.recordStatus === "ACTIVE" &&
     request.progressStatus === "UNSCHEDULED" &&
     request.project.isActive;
+  const showEdit =
+    actor.role === "CUSTOMER" && actor.id === request.createdById;
   const canCustomerPause =
     actor.role === "CUSTOMER" &&
     actor.id === request.createdById &&
@@ -71,7 +73,7 @@ export function RequestActions({
   const paused = request.recordStatus === "PAUSED";
   const archived = request.recordStatus === "ARCHIVED";
 
-  if (!isDeveloper && !canEdit && !canCustomerPause) return null;
+  if (!isDeveloper && !showEdit && !canCustomerPause) return null;
 
   return (
     <div className={compact ? "request-actions request-actions--compact" : "request-actions"}>
@@ -88,6 +90,16 @@ export function RequestActions({
           <Pencil aria-hidden="true" size={15} />
           编辑
         </Link>
+      ) : showEdit ? (
+        <button
+          type="button"
+          className={buttonClassName({ variant: "secondary", size: "small" })}
+          disabled
+          title="仅正常且未排期的需求可以编辑"
+        >
+          <Pencil aria-hidden="true" size={15} />
+          编辑
+        </button>
       ) : null}
       {isDeveloper && active ? (
         <label className="inline-select">

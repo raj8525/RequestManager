@@ -25,6 +25,19 @@ const requestTypeSchema = z.enum(requestTypes);
 const prioritySchema = z.enum(requestPriorities);
 const progressStatusSchema = z.enum(requestProgressStatuses);
 const recordStatusSchema = z.enum(requestRecordStatuses);
+export const requestSortFields = [
+  "requestNumber",
+  "project",
+  "createdBy",
+  "requestType",
+  "priority",
+  "progressStatus",
+  "recordStatus",
+  "updatedAt",
+] as const;
+export const requestSortDirections = ["asc", "desc"] as const;
+const requestSortFieldSchema = z.enum(requestSortFields);
+const requestSortDirectionSchema = z.enum(requestSortDirections);
 const idempotencyKeySchema = z
   .string()
   .trim()
@@ -78,6 +91,8 @@ export const listRequestsSchema = z
     priority: prioritySchema.optional(),
     progressStatus: progressStatusSchema.optional(),
     recordStatus: recordStatusSchema.optional(),
+    sort: requestSortFieldSchema.optional(),
+    direction: requestSortDirectionSchema.optional(),
     page: z.number().int().positive().optional().default(1),
     pageSize: z
       .number()
@@ -94,3 +109,5 @@ export type UpdateOwnRequestInput = z.input<typeof updateOwnRequestSchema>;
 export type ChangeProgressInput = z.input<typeof changeProgressSchema>;
 export type RequestLifecycleInput = z.input<typeof requestLifecycleSchema>;
 export type ListRequestsInput = z.input<typeof listRequestsSchema>;
+export type RequestSortField = (typeof requestSortFields)[number];
+export type RequestSortDirection = (typeof requestSortDirections)[number];

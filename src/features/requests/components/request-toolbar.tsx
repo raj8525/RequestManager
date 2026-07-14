@@ -11,6 +11,8 @@ export type RequestFilterValues = {
   priority?: string;
   progressStatus?: string;
   recordStatus?: string;
+  sort?: string;
+  direction?: string;
 };
 
 export function RequestToolbar({
@@ -22,6 +24,8 @@ export function RequestToolbar({
 }) {
   return (
     <form className="request-toolbar" action="/requests" method="get" aria-label="需求筛选">
+      {values.sort ? <input type="hidden" name="sort" value={values.sort} /> : null}
+      {values.direction ? <input type="hidden" name="direction" value={values.direction} /> : null}
       <label className="request-toolbar__search">
         <span className="sr-only">搜索需求</span>
         <Search aria-hidden="true" size={17} />

@@ -97,6 +97,31 @@ describe("RequestList", () => {
     expect(screen.getByRole("button", { name: "归档" })).toBeVisible();
   });
 
+  it("renders sorting links and keeps customer actions in the final cell", () => {
+    render(
+      <RequestList
+        role="CUSTOMER"
+        actorId={3}
+        items={[requestDto({ needsCustomerReply: false })]}
+        sort="updatedAt"
+        direction="desc"
+        searchParams={{ projectId: "2", page: "3" }}
+      />,
+    );
+
+    const updatedHeader = screen.getByRole("columnheader", { name: /更新时间/ });
+    expect(updatedHeader).toHaveAttribute("aria-sort", "descending");
+    expect(within(updatedHeader).getByRole("link")).toHaveAttribute(
+      "href",
+      "/requests?projectId=2&sort=updatedAt&direction=asc",
+    );
+
+    const row = screen.getByTestId("request-row-REQ-000007");
+    const cells = within(row).getAllByRole("cell");
+    expect(within(cells[0]!).queryByRole("link", { name: "编辑" })).toBeNull();
+    expect(within(cells.at(-1)!).getByRole("link", { name: "编辑" })).toBeVisible();
+  });
+
   it("shows a useful empty state", () => {
     render(<RequestList role="CUSTOMER" items={[]} />);
     expect(screen.getByText("没有找到符合条件的需求")).toBeVisible();

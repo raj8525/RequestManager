@@ -64,6 +64,11 @@ describe("RequestDetail", () => {
     expect(screen.getByRole("heading", { name: "操作历史" })).toBeVisible();
     expect(screen.getByText("未排期改为已排期")).toBeVisible();
     expect(screen.getByText("<b>原样显示</b>，不要作为 HTML 执行。")).toBeVisible();
+    expect(screen.getByRole("button", { name: "编辑" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "编辑" })).toHaveAttribute(
+      "title",
+      "仅正常且未排期的需求可以编辑",
+    );
     expect(container.querySelector("b")).toBeNull();
   });
 

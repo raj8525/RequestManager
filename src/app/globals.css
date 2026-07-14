@@ -523,7 +523,7 @@ summary:focus-visible {
 
 .request-table {
   border-collapse: collapse;
-  min-width: 940px;
+  min-width: 1080px;
   table-layout: fixed;
   width: 100%;
 }
@@ -545,7 +545,7 @@ summary:focus-visible {
 }
 
 .request-table th:first-child {
-  width: 34%;
+  width: 31%;
 }
 
 .request-table th:nth-child(2) {
@@ -557,7 +557,28 @@ summary:focus-visible {
 }
 
 .request-table th:last-child {
-  width: 10%;
+  width: 12%;
+}
+
+.request-table__sort {
+  align-items: center;
+  color: inherit;
+  display: inline-flex;
+  gap: 5px;
+  text-decoration: none;
+}
+
+.request-table__sort:hover,
+.request-table__sort:focus-visible {
+  color: var(--teal);
+}
+
+.request-table__sort svg {
+  flex: 0 0 auto;
+}
+
+.request-table__actions .request-actions {
+  justify-content: flex-start;
 }
 
 .request-table tbody tr:last-child td {
@@ -1611,8 +1632,8 @@ summary:focus-visible {
     display: grid;
     gap: 6px 10px;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    grid-template-rows: 88px 82px 44px 44px;
-    height: 304px;
+    grid-template-rows: 82px 44px 44px 44px 56px;
+    height: 326px;
     overflow: hidden;
     padding: 12px;
     position: relative;
@@ -1669,6 +1690,11 @@ summary:focus-visible {
     overflow-y: hidden;
     scrollbar-width: thin;
     width: 100%;
+  }
+
+  .request-table__actions {
+    grid-column: 1 / -1;
+    overflow: hidden;
   }
 
   .request-table .request-actions--compact .button,

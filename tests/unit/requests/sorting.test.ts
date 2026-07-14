@@ -147,7 +147,7 @@ describe("request list ordering", () => {
     expect(first.data.items[0]).not.toHaveProperty("privateNotes");
   });
 
-  it("applies filters before paging and uses updated time then id for developers", () => {
+  it("applies filters before paging and uses progress, priority, then updated time by default", () => {
     const db = database();
     const customer = insertActor(db, "customer", "CUSTOMER");
     const developer = insertActor(db, "developer", "DEVELOPER");
@@ -162,21 +162,27 @@ describe("request list ordering", () => {
       .returning()
       .get();
 
-    const ids = ["Alpha searchable request", "Beta ordinary request"].map(
-      (content, index) =>
-        db.db
-          .insert(requests)
-          .values({
-            projectId: project.id,
-            createdById: customer.id,
-            content,
-            requestType: index === 0 ? "BUG" : "CHANGE",
-            idempotencyKey: `developer-sort-${index}`,
-            createdAt: BASE_TIME,
-            updatedAt: BASE_TIME,
-          })
-          .returning()
-          .get().id,
+    const rows = [
+      { content: "Alpha searchable request", requestType: "BUG" as const, progressStatus: "COMPLETED" as const, priority: "URGENT" as const, offset: 4 },
+      { content: "Beta ordinary request", requestType: "CHANGE" as const, progressStatus: "UNSCHEDULED" as const, priority: "NORMAL" as const, offset: 3 },
+      { content: "Scheduled normal request", requestType: "CHANGE" as const, progressStatus: "SCHEDULED" as const, priority: "NORMAL" as const, offset: 2 },
+      { content: "Scheduled urgent request", requestType: "BUG" as const, progressStatus: "SCHEDULED" as const, priority: "URGENT" as const, offset: 1 },
+    ].map((value, index) =>
+      db.db
+        .insert(requests)
+        .values({
+          projectId: project.id,
+          createdById: customer.id,
+          content: value.content,
+          requestType: value.requestType,
+          progressStatus: value.progressStatus,
+          priority: value.priority,
+          idempotencyKey: `developer-sort-${index}`,
+          createdAt: BASE_TIME,
+          updatedAt: new Date(BASE_TIME.getTime() + value.offset * 60_000),
+        })
+        .returning()
+        .get(),
     );
 
     const listed = listRequests(db, developer, {});
@@ -190,10 +196,25 @@ describe("request list ordering", () => {
     expect(filtered.ok).toBe(true);
     if (!listed.ok || !filtered.ok) throw new Error("listing failed");
 
-    expect(listed.data.items.map((item) => item.id)).toEqual(ids.reverse());
+    expect(listed.data.items.map((item) => item.content)).toEqual([
+      "Scheduled urgent request",
+      "Scheduled normal request",
+      "Beta ordinary request",
+      "Alpha searchable request",
+    ]);
     expect(filtered.data.total).toBe(1);
     expect(filtered.data.items.map((item) => item.content)).toEqual([
       "Alpha searchable request",
     ]);
+
+    const oldestFirst = listRequests(db, developer, {
+      sort: "updatedAt",
+      direction: "asc",
+    });
+    expect(oldestFirst.ok).toBe(true);
+    if (!oldestFirst.ok) throw new Error("listing failed");
+    expect(oldestFirst.data.items.map((item) => item.id)).toEqual(
+      [...rows].sort((a, b) => +a.updatedAt - +b.updatedAt).map((row) => row.id),
+    );
   });
 });

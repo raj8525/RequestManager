@@ -1,10 +1,14 @@
-import { CircleAlert } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, CircleAlert } from "lucide-react";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import type { UserRole } from "@/db/types";
 import { RequestActions } from "@/features/requests/components/request-actions";
 import type { RequestViewDto } from "@/features/requests/presenter";
+import type {
+  RequestSortDirection,
+  RequestSortField,
+} from "@/features/requests/schemas";
 
 const typeLabels = {
   BUG: "Bug",
@@ -36,14 +40,81 @@ function formatUpdatedAt(value: Date): string {
   }).format(new Date(value));
 }
 
+const defaultDirections: Record<RequestSortField, RequestSortDirection> = {
+  requestNumber: "asc",
+  project: "asc",
+  createdBy: "asc",
+  requestType: "asc",
+  priority: "asc",
+  progressStatus: "asc",
+  recordStatus: "asc",
+  updatedAt: "desc",
+};
+
+function sortHref(
+  field: RequestSortField,
+  currentSort: RequestSortField | undefined,
+  currentDirection: RequestSortDirection | undefined,
+  searchParams: Record<string, string | undefined>,
+): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (value && !["page", "sort", "direction"].includes(key)) params.set(key, value);
+  }
+  const direction = currentSort === field
+    ? currentDirection === "asc" ? "desc" : "asc"
+    : defaultDirections[field];
+  params.set("sort", field);
+  params.set("direction", direction);
+  return `/requests?${params.toString()}`;
+}
+
+function SortableHeader({
+  field,
+  label,
+  sort,
+  direction,
+  searchParams,
+}: {
+  field: RequestSortField;
+  label: string;
+  sort?: RequestSortField;
+  direction?: RequestSortDirection;
+  searchParams: Record<string, string | undefined>;
+}) {
+  const active = sort === field;
+  const resolvedDirection = active ? direction ?? defaultDirections[field] : undefined;
+  return (
+    <th aria-sort={active ? resolvedDirection === "asc" ? "ascending" : "descending" : undefined}>
+      <Link
+        href={sortHref(field, sort, resolvedDirection, searchParams)}
+        className="request-table__sort"
+        title={`按${label}排序`}
+      >
+        <span>{label}</span>
+        {active ? resolvedDirection === "asc"
+          ? <ArrowUp aria-hidden="true" size={14} />
+          : <ArrowDown aria-hidden="true" size={14} />
+          : <ArrowUpDown aria-hidden="true" size={14} />}
+      </Link>
+    </th>
+  );
+}
+
 export function RequestList({
   role,
   actorId,
   items,
+  sort,
+  direction,
+  searchParams = {},
 }: {
   role: UserRole;
   actorId?: number;
   items: readonly RequestViewDto[];
+  sort?: RequestSortField;
+  direction?: RequestSortDirection;
+  searchParams?: Record<string, string | undefined>;
 }) {
   if (items.length === 0) {
     return (
@@ -59,14 +130,15 @@ export function RequestList({
       <table className="request-table">
         <thead>
           <tr>
-            <th>编号与需求</th>
-            <th>项目</th>
-            <th>提交人</th>
-            <th>类型</th>
-            <th>优先级</th>
-            <th>进度</th>
-            <th>记录</th>
-            <th>更新时间</th>
+            <SortableHeader field="requestNumber" label="编号与需求" sort={sort} direction={direction} searchParams={searchParams} />
+            <SortableHeader field="project" label="项目" sort={sort} direction={direction} searchParams={searchParams} />
+            <SortableHeader field="createdBy" label="提交人" sort={sort} direction={direction} searchParams={searchParams} />
+            <SortableHeader field="requestType" label="类型" sort={sort} direction={direction} searchParams={searchParams} />
+            <SortableHeader field="priority" label="优先级" sort={sort} direction={direction} searchParams={searchParams} />
+            <SortableHeader field="progressStatus" label="进度" sort={sort} direction={direction} searchParams={searchParams} />
+            <SortableHeader field="recordStatus" label="记录" sort={sort} direction={direction} searchParams={searchParams} />
+            <SortableHeader field="updatedAt" label="更新时间" sort={sort} direction={direction} searchParams={searchParams} />
+            <th>操作</th>
           </tr>
         </thead>
         <tbody>
@@ -102,13 +174,6 @@ export function RequestList({
                   >
                     {item.summary}
                   </Link>
-                  {actorId ? (
-                    <RequestActions
-                      actor={{ id: actorId, role }}
-                      request={item}
-                      compact
-                    />
-                  ) : null}
                 </td>
                 <td data-label="项目">{item.project.name}</td>
                 <td data-label="提交人">{item.createdBy.displayName}</td>
@@ -144,6 +209,15 @@ export function RequestList({
                   <time dateTime={new Date(item.updatedAt).toISOString()}>
                     {formatUpdatedAt(item.updatedAt)}
                   </time>
+                </td>
+                <td data-label="操作" className="request-table__actions">
+                  {actorId ? (
+                    <RequestActions
+                      actor={{ id: actorId, role }}
+                      request={item}
+                      compact
+                    />
+                  ) : null}
                 </td>
               </tr>
             );
