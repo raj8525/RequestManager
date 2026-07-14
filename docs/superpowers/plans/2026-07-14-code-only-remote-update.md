@@ -26,10 +26,10 @@
 **Interfaces:**
 - Produces: `command_update` and `update SSH_TARGET [--ssh-port PORT] [--origin URL] [--port PORT]`
 
-- [ ] **Step 1: Write failing tests** asserting help output includes `update SSH_TARGET`, invalid targets are rejected before transport, and `main` routes `update` separately from `sync`.
-- [ ] **Step 2: Run** `npm test -- tests/deployment/deploy-ubuntu.test.ts` and confirm failure because `update` is unknown.
-- [ ] **Step 3: Add `command_update`** with the same validated remote options as `command_sync`, then add help and `main` routing.
-- [ ] **Step 4: Re-run the focused test** and confirm the command contract passes.
+- [x] **Step 1: Write failing tests** asserting help output includes `update SSH_TARGET`, invalid targets are rejected before transport, and `main` routes `update` separately from `sync`.
+- [x] **Step 2: Run** `npm test -- tests/deployment/deploy-ubuntu.test.ts` and confirm failure because `update` is unknown.
+- [x] **Step 3: Add `command_update`** with the same validated remote options as `command_sync`, then add help and `main` routing.
+- [x] **Step 4: Re-run the focused test** and confirm the command contract passes.
 
 ### Task 2: Code-only bundle release
 
@@ -40,11 +40,11 @@
 **Interfaces:**
 - Produces: `release_to_server(target, ssh_port, origin, port, replace_data)`; `update` passes `false`, `sync` passes `true`.
 
-- [ ] **Step 1: Write a failing safety-contract test** proving the update branch creates and uploads a Git bundle and calls remote bundle deployment, while local backup creation, backup `scp`, and `__receive-backup` are confined to `replace_data=true`.
-- [ ] **Step 2: Run the focused deployment test** and confirm the missing shared release path causes failure.
-- [ ] **Step 3: Refactor `sync_to_server` into `release_to_server`** so revision validation, temporary directories, short ControlMaster socket, bundle creation, upload, remote deployment, cleanup, and failure traps are shared. Guard only local backup, destructive confirmation, backup upload, and remote restore behind `replace_data=true`.
-- [ ] **Step 4: Add thin `update_to_server` and `sync_to_server` wrappers** and distinct success messages.
-- [ ] **Step 5: Run the focused deployment test, `bash -n`, and ShellCheck** and fix all findings.
+- [x] **Step 1: Write a failing safety-contract test** proving the update branch creates and uploads a Git bundle and calls remote bundle deployment, while local backup creation, backup `scp`, and `__receive-backup` are confined to `replace_data=true`.
+- [x] **Step 2: Run the focused deployment test** and confirm the missing shared release path causes failure.
+- [x] **Step 3: Refactor `sync_to_server` into `release_to_server`** so revision validation, temporary directories, short ControlMaster socket, bundle creation, upload, remote deployment, cleanup, and failure traps are shared. Guard only local backup, destructive confirmation, backup upload, and remote restore behind `replace_data=true`.
+- [x] **Step 4: Route `update` and `sync` through the shared release function** with distinct modes and success messages.
+- [x] **Step 5: Run the focused deployment test, `bash -n`, and ShellCheck** and fix all findings.
 
 ### Task 3: Documentation and release verification
 
@@ -57,8 +57,15 @@
 **Interfaces:**
 - Produces: one documented operator command with an explicit data-preservation boundary.
 
-- [ ] **Step 1: Extend the documentation contract test** to require the same `update root@SERVER_IP` command in README and operations docs.
-- [ ] **Step 2: Update documentation** to contrast `update` with `sync` and explain remote backup plus migration semantics.
-- [ ] **Step 3: Run** `npm test`, `npm run typecheck`, `npm run lint`, an isolated-database `npm run build`, `npm audit`, Bash syntax checking, and ShellCheck.
-- [ ] **Step 4: Commit and push** only the specification, plan, script, tests, and aligned documentation.
-- [ ] **Step 5: Execute the public `update` command against `47.121.188.131`** and verify the deployed revision, `/app/data` bind mount, login HTTP 200, attachment integrity, and unchanged counts for `users`, `projects`, `requests`, `attachments`, and `developer_questions`.
+- [x] **Step 1: Extend the documentation contract test** to require the same `update root@SERVER_IP` command in README and operations docs.
+- [x] **Step 2: Update documentation** to contrast `update` with `sync` and explain remote backup plus migration semantics.
+- [x] **Step 3: Run** `npm test`, `npm run typecheck`, `npm run lint`, an isolated-database `npm run build`, `npm audit`, Bash syntax checking, and ShellCheck.
+- [x] **Step 4: Commit and push** only the specification, plan, script, tests, and aligned documentation.
+- [x] **Step 5: Execute the public `update` command against `47.121.188.131`** and verify the deployed revision, `/app/data` bind mount, login HTTP 200, attachment integrity, and unchanged counts for `users`, `projects`, `requests`, `attachments`, and `developer_questions`.
+
+## Verification Result
+
+- Deployed revision: `9892ebd6429a83937395423af3358f4913d48a23`.
+- Bind mount remained `bind:/var/lib/request-manager`; container status was `running`; login returned HTTP 200.
+- Counts before and after update were identical: users 8, projects 2, requests 8, attachments 2, developer questions 0.
+- Attachment integrity reported no missing, orphaned, size-mismatched, or hash-mismatched files.
