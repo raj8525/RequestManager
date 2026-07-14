@@ -1188,6 +1188,13 @@ summary:focus-visible {
   flex-basis: 100%;
 }
 
+.request-title {
+  font-size: 20px;
+  line-height: 1.4;
+  margin: 24px 0 0;
+  overflow-wrap: anywhere;
+}
+
 .request-content {
   font-size: 16px;
   line-height: 1.75;

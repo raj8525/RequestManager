@@ -19,10 +19,27 @@ async function pasteScreenshot(page: import("@playwright/test").Page): Promise<v
   }, screenshot);
 }
 
+test("fills a legacy request title once without exposing other edit fields", async ({ page }) => {
+  await loginAs(page, "customerA");
+  await page.goto("/requests?recordStatus=ARCHIVED");
+  const legacyRow = page.getByTestId("request-row-REQ-000001");
+  await expect(legacyRow.getByRole("link", { name: "待补充标题" })).toBeVisible();
+  await legacyRow.getByRole("link", { name: "补充标题", exact: true }).click();
+  await expect(page.getByRole("form", { name: "补充标题" })).toBeVisible();
+  await expect(page.getByLabel("需求内容")).toHaveCount(0);
+  await page.getByRole("textbox", { name: "标题", exact: true }).fill("历史需求标题已补齐");
+  await page.getByRole("button", { name: "保存标题" }).click();
+  await expect(page.getByRole("heading", { name: "历史需求标题已补齐" })).toBeVisible();
+  await page.goto("/requests?recordStatus=ARCHIVED");
+  await expect(legacyRow.getByRole("link", { name: "历史需求标题已补齐" })).toBeVisible();
+  await expect(legacyRow.getByRole("button", { name: "编辑" })).toBeDisabled();
+});
+
 test("runs the customer and developer request lifecycle with simple clarification", async ({
   page,
 }) => {
   const content = `结算页面保存后金额显示错误 ${Date.now()}`;
+  const title = "结算页面金额显示错误";
   const editedContent = `${content}，刷新页面后仍可复现。`;
   const publicRemark = "已复现，修复将包含金额格式校验。";
   const privateNote = "开发者 A 私人排查笔记，不得发送给客户。";
@@ -32,6 +49,7 @@ test("runs the customer and developer request lifecycle with simple clarificatio
 
   await loginAs(page, "customerA");
   await page.goto("/requests/new");
+  await page.getByLabel("标题").fill(title);
   await page.getByLabel("需求内容").fill(content);
   await page.getByLabel("需求类型").selectOption({ label: "Bug" });
   await page.getByLabel("优先级").selectOption({ label: "加急" });
@@ -46,6 +64,7 @@ test("runs the customer and developer request lifecycle with simple clarificatio
 
   await page.goto("/requests");
   const createdRow = page.getByTestId(`request-row-${requestNumber}`);
+  await expect(createdRow.getByRole("link", { name: title })).toBeVisible();
   const createdCells = createdRow.getByRole("cell");
   await expect(createdCells.first().getByRole("link", { name: "编辑" })).toHaveCount(0);
   await expect(createdCells.last().getByRole("link", { name: "编辑" })).toBeVisible();

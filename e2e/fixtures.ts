@@ -52,6 +52,7 @@ export async function loginAs(
 export async function createRequest(
   page: Page,
   options: {
+    title?: string;
     content: string;
     withScreenshot?: boolean;
     requestType?: "Bug" | "功能变更" | "新增功能";
@@ -59,6 +60,7 @@ export async function createRequest(
   },
 ): Promise<string> {
   await page.goto("/requests/new");
+  await page.getByLabel("标题").fill(options.title ?? options.content.slice(0, 100));
   await page.getByLabel("需求内容").fill(options.content);
   await page
     .getByLabel("需求类型")

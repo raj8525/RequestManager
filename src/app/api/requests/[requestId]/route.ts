@@ -4,6 +4,7 @@ import {
   editRequestWithAttachments,
   type EditRequestWithAttachmentsInput,
 } from "@/features/attachments/service";
+import { fillLegacyRequestTitle } from "@/features/requests/service";
 import { storagePathsFromEnvironment } from "@/features/attachments/storage";
 import { assertSameOrigin, SameOriginError } from "@/lib/csrf";
 import { getEnvironment } from "@/lib/env";
@@ -100,6 +101,22 @@ export function createPutHandler(
       return multipartFormFailure(error);
     }
     const files = attachmentFiles(form);
+    const editMode = formString(form, "editMode");
+    if (editMode === "fill-title") {
+      if (!files || files.length > 0) {
+        return routeFailure("INVALID_INPUT", "补充标题时不能修改截图");
+      }
+      const result = await fillLegacyRequestTitle(
+        dependencies.database,
+        actor,
+        {
+          requestId,
+          expectedVersion: Number(formString(form, "expectedVersion")),
+          title: formString(form, "title") ?? "",
+        },
+      );
+      return actionResponse(result);
+    }
     const retainedIds = retainedAttachmentIds(form);
     if (!files || !retainedIds) {
       return routeFailure("INVALID_INPUT", "提交的信息无效", {
@@ -113,6 +130,7 @@ export function createPutHandler(
       {
         requestId,
         expectedVersion: Number(formString(form, "expectedVersion")),
+        title: formString(form, "title") ?? "",
         content: formString(form, "content") ?? "",
         requestType: formString(form, "requestType") ?? "",
         priority: formString(form, "priority") ?? "",

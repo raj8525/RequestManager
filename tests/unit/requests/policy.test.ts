@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { AuthenticatedUser } from "@/auth/session-service";
 import {
   assertValidStateCombination,
+  canFillLegacyRequestTitle,
   canEditRequest,
   decidePause,
   type RequestPolicySubject,
@@ -27,6 +28,7 @@ function request(
 ): RequestPolicySubject {
   return {
     createdById: 1,
+    title: "已存在标题",
     progressStatus: "UNSCHEDULED",
     recordStatus: "ACTIVE",
     ...overrides,
@@ -44,6 +46,23 @@ describe("request policy", () => {
     expect(
       canEditRequest(actor(1), request({ recordStatus: "ARCHIVED" })),
     ).toBe(false);
+  });
+
+  it.each([
+    ["SCHEDULED", "ACTIVE"],
+    ["COMPLETED", "ACTIVE"],
+    ["SCHEDULED", "PAUSED"],
+    ["COMPLETED", "ARCHIVED"],
+  ] as const)("allows only the owner to fill a missing legacy title in %s + %s", (progressStatus, recordStatus) => {
+    const legacy = request({
+      title: null,
+      progressStatus,
+      recordStatus,
+    });
+    expect(canFillLegacyRequestTitle(actor(1), legacy)).toBe(true);
+    expect(canFillLegacyRequestTitle(actor(2), legacy)).toBe(false);
+    expect(canFillLegacyRequestTitle(actor(1, "DEVELOPER"), legacy)).toBe(false);
+    expect(canFillLegacyRequestTitle(actor(1), request())).toBe(false);
   });
 
   it("permits customer pause only for their own active scheduled request", () => {

@@ -163,16 +163,17 @@ describe("request list ordering", () => {
       .get();
 
     const rows = [
-      { content: "Alpha searchable request", requestType: "BUG" as const, progressStatus: "COMPLETED" as const, priority: "URGENT" as const, offset: 4 },
-      { content: "Beta ordinary request", requestType: "CHANGE" as const, progressStatus: "UNSCHEDULED" as const, priority: "NORMAL" as const, offset: 3 },
-      { content: "Scheduled normal request", requestType: "CHANGE" as const, progressStatus: "SCHEDULED" as const, priority: "NORMAL" as const, offset: 2 },
-      { content: "Scheduled urgent request", requestType: "BUG" as const, progressStatus: "SCHEDULED" as const, priority: "URGENT" as const, offset: 1 },
+      { title: "Completed request", content: "Alpha searchable request", requestType: "BUG" as const, progressStatus: "COMPLETED" as const, priority: "URGENT" as const, offset: 4 },
+      { title: "Unique title token", content: "Beta ordinary request", requestType: "CHANGE" as const, progressStatus: "UNSCHEDULED" as const, priority: "NORMAL" as const, offset: 3 },
+      { title: "Scheduled normal", content: "Scheduled normal request", requestType: "CHANGE" as const, progressStatus: "SCHEDULED" as const, priority: "NORMAL" as const, offset: 2 },
+      { title: "Scheduled urgent", content: "Scheduled urgent request", requestType: "BUG" as const, progressStatus: "SCHEDULED" as const, priority: "URGENT" as const, offset: 1 },
     ].map((value, index) =>
       db.db
         .insert(requests)
         .values({
           projectId: project.id,
           createdById: customer.id,
+          title: value.title,
           content: value.content,
           requestType: value.requestType,
           progressStatus: value.progressStatus,
@@ -206,6 +207,11 @@ describe("request list ordering", () => {
     expect(filtered.data.items.map((item) => item.content)).toEqual([
       "Alpha searchable request",
     ]);
+    const titleFiltered = listRequests(db, developer, { search: "unique title token" });
+    expect(titleFiltered).toMatchObject({
+      ok: true,
+      data: { total: 1, items: [{ title: "Unique title token" }] },
+    });
 
     const oldestFirst = listRequests(db, developer, {
       sort: "updatedAt",

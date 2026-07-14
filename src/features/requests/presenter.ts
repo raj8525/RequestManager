@@ -6,6 +6,7 @@ export type RequestDto = {
   requestNumber: string;
   projectId: number;
   createdById: number;
+  title: string | null;
   content: string;
   summary: string;
   requestType: Request["requestType"];
@@ -50,6 +51,7 @@ export function presentRequest(request: Request): RequestDto {
     requestNumber: formatRequestNumber(request.id),
     projectId: request.projectId,
     createdById: request.createdById,
+    title: request.title,
     content: request.content,
     summary: summarizeRequestContent(request.content),
     requestType: request.requestType,

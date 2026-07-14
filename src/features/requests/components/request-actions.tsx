@@ -36,6 +36,11 @@ export function RequestActions({
     request.recordStatus === "ACTIVE" &&
     request.progressStatus === "UNSCHEDULED" &&
     request.project.isActive;
+  const canFillTitle =
+    actor.role === "CUSTOMER" &&
+    actor.id === request.createdById &&
+    request.title === null &&
+    request.project.isActive;
   const showEdit =
     actor.role === "CUSTOMER" && actor.id === request.createdById;
   const canCustomerPause =
@@ -82,13 +87,13 @@ export function RequestActions({
           {error}
         </p>
       ) : null}
-      {canEdit ? (
+      {canEdit || canFillTitle ? (
         <Link
           href={`/requests/${request.requestNumber}/edit`}
           className={buttonClassName({ variant: "secondary", size: "small" })}
         >
           <Pencil aria-hidden="true" size={15} />
-          编辑
+          {canFillTitle ? "补充标题" : "编辑"}
         </Link>
       ) : showEdit ? (
         <button

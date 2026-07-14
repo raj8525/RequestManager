@@ -164,6 +164,7 @@ function requireLiveCustomer(
 function fingerprintCreatePayload(
   input: {
     projectId: number;
+    title: string;
     content: string;
     requestType: Request["requestType"];
     priority: Request["priority"];
@@ -172,6 +173,7 @@ function fingerprintCreatePayload(
 ): string {
   const base = {
     projectId: input.projectId,
+    title: input.title,
     content: input.content,
     requestType: input.requestType,
     priority: input.priority,
@@ -370,6 +372,7 @@ export async function createRequestWithAttachments(
           .values({
             projectId: parsed.data.projectId,
             createdById: currentActor.id,
+            title: parsed.data.title,
             content: parsed.data.content,
             requestType: parsed.data.requestType,
             priority: parsed.data.priority,
@@ -500,6 +503,7 @@ export async function editRequestWithAttachments(
         const updated = database.db
           .update(requests)
           .set({
+            title: parsed.data.title,
             content: parsed.data.content,
             requestType: parsed.data.requestType,
             priority: parsed.data.priority,

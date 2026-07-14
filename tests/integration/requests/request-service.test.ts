@@ -14,6 +14,7 @@ import {
   archiveRequest,
   changeProgress,
   createRequest,
+  fillLegacyRequestTitle,
   pauseRequest,
   restoreRequest,
   resumeRequest,
@@ -85,6 +86,7 @@ async function createFixtureRequest(
 ) {
   const result = await createRequest(database, customer, {
     projectId,
+    title: "A clear request title",
     content: "A sufficiently detailed customer request",
     requestType: "BUG",
     priority: "NORMAL",
@@ -117,6 +119,7 @@ describe("request domain service", () => {
 
     const input = {
       projectId: active.id,
+      title: "  Checkout button is unresponsive  ",
       content: "  A sufficiently detailed customer request  ",
       requestType: "NEW_FEATURE" as const,
       priority: "IMPORTANT" as const,
@@ -128,6 +131,7 @@ describe("request domain service", () => {
     expect(first).toMatchObject({
       ok: true,
       data: {
+        title: "Checkout button is unresponsive",
         content: "A sufficiently detailed customer request",
         createdById: owner.id,
         projectId: active.id,
@@ -165,6 +169,17 @@ describe("request domain service", () => {
     await expect(
       createRequest(db, owner, {
         ...input,
+        title: "   ",
+        idempotencyKey: "blank-title",
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      code: "INVALID_INPUT",
+      fieldErrors: { title: ["需求标题不能为空"] },
+    });
+    await expect(
+      createRequest(db, owner, {
+        ...input,
         content: " too short ",
         idempotencyKey: "short-content",
       }),
@@ -181,6 +196,64 @@ describe("request domain service", () => {
     ]);
   });
 
+  it("lets the owner fill a legacy title once without changing archived request content", async () => {
+    const db = database();
+    const owner = insertActor(db, "owner", "CUSTOMER");
+    const peer = insertActor(db, "peer", "CUSTOMER");
+    const project = insertProject(db, "APP");
+    assign(db, owner.id, project.id);
+    assign(db, peer.id, project.id);
+    const legacy = db.db.insert(requests).values({
+      projectId: project.id,
+      createdById: owner.id,
+      title: null,
+      content: "The immutable body of a historical customer request",
+      requestType: "CHANGE",
+      priority: "IMPORTANT",
+      progressStatus: "COMPLETED",
+      recordStatus: "ARCHIVED",
+      idempotencyKey: "legacy-title",
+      createPayloadFingerprint: "legacy",
+      createdAt: NOW,
+      updatedAt: NOW,
+    }).returning().get();
+
+    await expect(fillLegacyRequestTitle(db, peer, {
+      requestId: legacy.id,
+      expectedVersion: 1,
+      title: "Peer cannot fill this title",
+    })).resolves.toMatchObject({ ok: false, code: "FORBIDDEN" });
+
+    db.db.update(projects).set({ isActive: false }).where(eq(projects.id, project.id)).run();
+    await expect(fillLegacyRequestTitle(db, owner, {
+      requestId: legacy.id,
+      expectedVersion: 1,
+      title: "Inactive projects remain read only",
+    })).resolves.toMatchObject({ ok: false, code: "FORBIDDEN" });
+    db.db.update(projects).set({ isActive: true }).where(eq(projects.id, project.id)).run();
+
+    const filled = await fillLegacyRequestTitle(db, owner, {
+      requestId: legacy.id,
+      expectedVersion: 1,
+      title: "  Historical voucher import  ",
+    });
+    expect(filled).toMatchObject({
+      ok: true,
+      data: {
+        title: "Historical voucher import",
+        content: "The immutable body of a historical customer request",
+        progressStatus: "COMPLETED",
+        recordStatus: "ARCHIVED",
+        version: 2,
+      },
+    });
+    await expect(fillLegacyRequestTitle(db, owner, {
+      requestId: legacy.id,
+      expectedVersion: 2,
+      title: "A second title must be rejected",
+    })).resolves.toMatchObject({ ok: false, code: "CONFLICT" });
+  });
+
   it("replays the immutable normalized creation payload after customer edits", async () => {
     const db = database();
     const owner = insertActor(db, "owner", "CUSTOMER");
@@ -189,6 +262,7 @@ describe("request domain service", () => {
 
     const originalInput = {
       projectId: project.id,
+      title: "Original request title",
       content: "  The original sufficiently detailed customer request  ",
       requestType: "BUG" as const,
       priority: "NORMAL" as const,
@@ -206,6 +280,7 @@ describe("request domain service", () => {
     const edited = await updateOwnRequest(db, owner, {
       requestId: created.data.id,
       expectedVersion: created.data.version,
+      title: "Edited request title",
       content: "The edited and still sufficiently detailed customer request",
       requestType: "CHANGE",
       priority: "URGENT",
@@ -258,6 +333,7 @@ describe("request domain service", () => {
     assign(db, owner.id, project.id);
     const input = {
       projectId: project.id,
+      title: "Legacy fingerprint request",
       content: "A sufficiently detailed legacy customer request",
       requestType: "BUG" as const,
       priority: "NORMAL" as const,
@@ -290,6 +366,7 @@ describe("request domain service", () => {
     const edited = await updateOwnRequest(db, owner, {
       requestId: request.id,
       expectedVersion: request.version,
+      title: "Updated request title",
       content: "An updated and still detailed customer request",
       requestType: "CHANGE",
       priority: "URGENT",
@@ -303,6 +380,7 @@ describe("request domain service", () => {
       updateOwnRequest(db, peer, {
         requestId: request.id,
         expectedVersion: 2,
+        title: "Peer title",
         content: "Peer must not overwrite the customer request",
         requestType: "BUG",
         priority: "NORMAL",
@@ -312,6 +390,7 @@ describe("request domain service", () => {
       updateOwnRequest(db, developer, {
         requestId: request.id,
         expectedVersion: 2,
+        title: "Developer title",
         content: "Developer must not rewrite customer content",
         requestType: "BUG",
         priority: "NORMAL",
@@ -328,6 +407,7 @@ describe("request domain service", () => {
       updateOwnRequest(db, owner, {
         requestId: request.id,
         expectedVersion: 2,
+        title: "Stale title",
         content: "This stale edit must never overwrite scheduling",
         requestType: "BUG",
         priority: "NORMAL",
@@ -468,6 +548,7 @@ describe("request domain service", () => {
       updateOwnRequest(db, outsider, {
         requestId: request.id,
         expectedVersion: 1,
+        title: "Outsider title",
         content: "An outsider must not mutate a guessed request id",
         requestType: "CHANGE",
         priority: "URGENT",
@@ -487,6 +568,7 @@ describe("request domain service", () => {
       updateOwnRequest(db, owner, {
         requestId: request.id,
         expectedVersion: 1,
+        title: "Removed member title",
         content: "Removed memberships lose access immediately",
         requestType: "CHANGE",
         priority: "NORMAL",

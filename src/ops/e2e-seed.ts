@@ -3,7 +3,7 @@ import { existsSync, rmSync } from "node:fs";
 import { hashPassword } from "@/auth/password";
 import { closeDatabase, createDatabase } from "@/db/client";
 import { migrateDatabase } from "@/db/migrate";
-import { projectMemberships, projects, users } from "@/db/schema";
+import { projectMemberships, projects, requests, users } from "@/db/schema";
 import {
   assertIndependentPaths,
   assertSafeManagedFilePath,
@@ -147,6 +147,22 @@ export async function seedEndToEndData(options: SeedEndToEndOptions): Promise<vo
         })),
       )
       .run();
+    const customerA = seededUsers.find((user) => user.username === "customer-a");
+    if (!customerA) throw new Error("customer-a seed is missing");
+    database.db.insert(requests).values({
+      projectId: project.id,
+      createdById: customerA.id,
+      title: null,
+      content: "这是迁移前创建的历史需求正文，只允许客户补充一次标题。",
+      requestType: "CHANGE",
+      priority: "IMPORTANT",
+      progressStatus: "COMPLETED",
+      recordStatus: "ARCHIVED",
+      idempotencyKey: "legacy-title-e2e",
+      createPayloadFingerprint: "legacy-e2e",
+      createdAt: now,
+      updatedAt: now,
+    }).run();
   } finally {
     closeDatabase(database);
   }

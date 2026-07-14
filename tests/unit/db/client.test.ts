@@ -181,7 +181,7 @@ describe("createDatabase", () => {
     expect(foreignKeys.sort()).toEqual([...expectedForeignKeys].sort());
   });
 
-  it("adds an empty immutable creation fingerprint when upgrading existing requests", () => {
+  it("adds an empty immutable creation fingerprint and nullable title when upgrading existing requests", () => {
     const directory = mkdtempSync(join(tmpdir(), "request-manager-migration-test-"));
     const legacyMigrations = join(directory, "legacy-migrations");
     mkdirSync(join(legacyMigrations, "meta"), { recursive: true });
@@ -242,13 +242,21 @@ describe("createDatabase", () => {
         dflt_value: "''",
       }),
     );
+    expect(columns).toContainEqual(
+      expect.objectContaining({
+        name: "title",
+        notnull: 0,
+        dflt_value: null,
+      }),
+    );
     expect(
       database.sqlite
         .prepare(
-          "select content, create_payload_fingerprint as createPayloadFingerprint from requests where id = 1",
+          "select title, content, create_payload_fingerprint as createPayloadFingerprint from requests where id = 1",
         )
         .get(),
     ).toEqual({
+      title: null,
       content: "A legacy sufficiently detailed request",
       createPayloadFingerprint: "",
     });

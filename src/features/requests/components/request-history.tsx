@@ -4,7 +4,7 @@ import type { RequestHistoryEventDto } from "@/features/requests/queries";
 
 const eventLabels: Record<RequestHistoryEventDto["eventType"], string> = {
   REQUEST_CREATED: "创建了需求",
-  REQUEST_UPDATED: "更新了需求内容",
+  REQUEST_UPDATED: "更新了需求",
   PROGRESS_CHANGED: "更新了进度",
   REQUEST_PAUSED: "暂停了需求",
   REQUEST_RESUMED: "恢复了需求",

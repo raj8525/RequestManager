@@ -105,6 +105,7 @@ async function fixture() {
 
   const created = await createRequest(database, owner, {
     projectId: project.id,
+    title: "Communication fixture request",
     content: "A sufficiently detailed request for communication tests",
     requestType: "BUG",
     priority: "NORMAL",

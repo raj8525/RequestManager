@@ -14,6 +14,7 @@ const request: RequestViewDto = {
   requestNumber: "REQ-000007",
   projectId: 2,
   createdById: 3,
+  title: "保存按钮点击后没有响应",
   content: "<b>原样显示</b>，不要作为 HTML 执行。",
   summary: "<b>原样显示</b>，不要作为 HTML 执行。",
   requestType: "BUG",
@@ -64,6 +65,7 @@ describe("RequestDetail", () => {
     expect(screen.getByRole("heading", { name: "操作历史" })).toBeVisible();
     expect(screen.getByText("未排期改为已排期")).toBeVisible();
     expect(screen.getByText("<b>原样显示</b>，不要作为 HTML 执行。")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "保存按钮点击后没有响应" })).toBeVisible();
     expect(screen.getByRole("button", { name: "编辑" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "编辑" })).toHaveAttribute(
       "title",

@@ -18,6 +18,7 @@ import {
   attachments,
   projectMemberships,
   projects,
+  requests,
   users,
 } from "@/db/schema";
 import { createRequestWithAttachments } from "@/features/attachments/service";
@@ -86,6 +87,7 @@ function createForm(
 ): FormData {
   const form = new FormData();
   form.set("projectId", String(projectId));
+  form.set("title", "Multipart request title");
   form.set("content", "A sufficiently detailed multipart request body");
   form.set("requestType", "BUG");
   form.set("priority", "NORMAL");
@@ -216,6 +218,52 @@ describe("multipart request and protected attachment routes", () => {
     });
   });
 
+  it("accepts a title-only legacy update without changing archived request content", async () => {
+    const db = database();
+    const paths = storage();
+    const owner = insertActor(db, "owner", "CUSTOMER");
+    const project = insertProject(db, "APP");
+    assign(db, owner.id, project.id);
+    const created = await createRequestWithAttachments(db, owner, {
+      projectId: project.id,
+      title: "Temporary title",
+      content: "Historical request content must remain unchanged",
+      requestType: "CHANGE",
+      priority: "IMPORTANT",
+      idempotencyKey: "legacy-route-title",
+    }, [], paths);
+    if (!created.ok) throw new Error(`creation failed: ${created.code}`);
+    db.db.update(requests).set({
+      title: null,
+      progressStatus: "COMPLETED",
+      recordStatus: "ARCHIVED",
+    }).where(eq(requests.id, created.data.id)).run();
+
+    const form = new FormData();
+    form.set("editMode", "fill-title");
+    form.set("expectedVersion", "1");
+    form.set("title", "  Historical request title  ");
+    const handler = createPutHandler({
+      database: db,
+      storagePaths: paths,
+      appOrigin: APP_ORIGIN,
+      resolveActor: async () => owner,
+    });
+    const response = await handler(
+      multipartRequest(`/api/requests/${created.data.requestNumber}`, "PUT", form),
+      { params: Promise.resolve({ requestId: created.data.requestNumber }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(db.db.select().from(requests).where(eq(requests.id, created.data.id)).get()).toMatchObject({
+      title: "Historical request title",
+      content: "Historical request content must remain unchanged",
+      progressStatus: "COMPLETED",
+      recordStatus: "ARCHIVED",
+      version: 2,
+    });
+  });
+
   it.each([
     ["URL-encoded", "application/x-www-form-urlencoded"],
     ["plain text", "text/plain"],
@@ -312,6 +360,7 @@ describe("multipart request and protected attachment routes", () => {
       owner,
       {
         projectId: project.id,
+        title: "Protected route request",
         content: "A request created before the declared-length edit",
         requestType: "BUG",
         priority: "NORMAL",
@@ -432,7 +481,7 @@ describe("multipart request and protected attachment routes", () => {
       resolveActor: async () => owner,
     });
     const form = createForm(project.id, pngFile(), "maximum-parts");
-    for (let index = 0; index < 26; index += 1) {
+    for (let index = 0; index < 25; index += 1) {
       form.append("extra", String(index));
     }
 
@@ -543,6 +592,7 @@ describe("multipart request and protected attachment routes", () => {
       owner,
       {
         projectId: project.id,
+        title: "Route attachment request",
         content: "A request created before the multipart edit",
         requestType: "BUG",
         priority: "NORMAL",
@@ -554,6 +604,7 @@ describe("multipart request and protected attachment routes", () => {
     if (!created.ok) throw new Error(`creation failed: ${created.code}`);
     const editForm = new FormData();
     editForm.set("expectedVersion", "99");
+    editForm.set("title", "Stale multipart edit");
     editForm.set("content", "A stale multipart edit must be rejected");
     editForm.set("requestType", "CHANGE");
     editForm.set("priority", "URGENT");
@@ -617,6 +668,7 @@ describe("multipart request and protected attachment routes", () => {
       owner,
       {
         projectId: project.id,
+        title: "Route edit request",
         content: "A request whose screenshot is streamed through auth",
         requestType: "BUG",
         priority: "NORMAL",
@@ -683,6 +735,7 @@ describe("multipart request and protected attachment routes", () => {
       owner,
       {
         projectId: project.id,
+        title: "Route stale request",
         content: "A request whose upload root must not be redirected",
         requestType: "BUG",
         priority: "NORMAL",
@@ -722,6 +775,7 @@ describe("multipart request and protected attachment routes", () => {
       owner,
       {
         projectId: project.id,
+        title: "Route authorization request",
         content: "A request whose upload prefix must not be redirected",
         requestType: "BUG",
         priority: "NORMAL",

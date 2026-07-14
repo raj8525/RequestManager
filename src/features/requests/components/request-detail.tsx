@@ -101,7 +101,9 @@ export function RequestDetail({
           </div>
           <RequestActions actor={actor} request={request} />
         </div>
-        <h2 className="sr-only" id="request-content-heading">需求内容</h2>
+        <h2 className="request-title" id="request-content-heading">
+          {request.title ?? "待补充标题"}
+        </h2>
         <p className="request-content plain-text">{request.content}</p>
         <dl className="request-meta">
           <div>

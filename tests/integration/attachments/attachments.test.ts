@@ -234,6 +234,7 @@ describe("protected attachment pipeline", () => {
     assign(db, owner.id, project.id);
     const input = {
       projectId: project.id,
+      title: "Request with screenshots",
       content: "A sufficiently detailed request with screenshots",
       requestType: "BUG" as const,
       priority: "NORMAL" as const,
@@ -287,6 +288,7 @@ describe("protected attachment pipeline", () => {
     assign(db, owner.id, project.id);
     const input = {
       projectId: project.id,
+      title: "Original screenshot request",
       content: "The original sufficiently detailed screenshot request",
       requestType: "BUG" as const,
       priority: "NORMAL" as const,
@@ -312,6 +314,7 @@ describe("protected attachment pipeline", () => {
       {
         requestId: created.data.id,
         expectedVersion: 1,
+        title: "Edited screenshot request",
         content: "The edited and still sufficiently detailed screenshot request",
         requestType: "CHANGE",
         priority: "URGENT",
@@ -367,6 +370,7 @@ describe("protected attachment pipeline", () => {
         owner,
         {
           projectId: project.id,
+          title: "Rollback attachment request",
           content: "A request that must be rolled back completely",
           requestType: "BUG",
           priority: "NORMAL",
@@ -411,6 +415,7 @@ describe("protected attachment pipeline", () => {
       owner,
       {
         projectId: project.id,
+        title: "Committed attachment request",
         content: "A committed request whose response query fails",
         requestType: "BUG",
         priority: "NORMAL",
@@ -439,6 +444,7 @@ describe("protected attachment pipeline", () => {
       owner,
       {
         projectId: project.id,
+        title: "Two screenshot request",
         content: "A request with two initial screenshots",
         requestType: "BUG",
         priority: "NORMAL",
@@ -462,6 +468,7 @@ describe("protected attachment pipeline", () => {
       {
         requestId: created.data.id,
         expectedVersion: created.data.version,
+        title: "Changed screenshot request",
         content: "The body and screenshot set changed atomically",
         requestType: "CHANGE",
         priority: "IMPORTANT",
@@ -519,6 +526,7 @@ describe("protected attachment pipeline", () => {
       owner,
       {
         projectId: project.id,
+        title: "Protected edit request",
         content: "A request protected from stale and foreign edits",
         requestType: "BUG",
         priority: "NORMAL",
@@ -532,6 +540,7 @@ describe("protected attachment pipeline", () => {
     const edit = {
       requestId: created.data.id,
       expectedVersion: 99,
+      title: "Invalid edit title",
       content: "This invalid edit must not alter any stored data",
       requestType: "CHANGE" as const,
       priority: "URGENT" as const,
@@ -594,6 +603,7 @@ describe("protected attachment pipeline", () => {
       owner,
       {
         projectId: project.id,
+        title: "Authorized screenshot request",
         content: "A request with an authorization protected screenshot",
         requestType: "BUG",
         priority: "NORMAL",

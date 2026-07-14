@@ -66,7 +66,7 @@ test("keeps each developer private note out of other page and RSC payloads", asy
   const customerPayload = await collectTextResponses(page, async () => {
     await page.goto(`/requests/${requestNumber}`);
   });
-  await expect(page.getByRole("heading", { name: "私人笔记" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "私人笔记", exact: true })).toHaveCount(0);
   expect(customerPayload).not.toContain(secretA);
   expect(customerPayload).not.toContain(secretB);
 });

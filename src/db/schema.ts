@@ -244,6 +244,7 @@ export const requests = sqliteTable(
     createdById: integer("created_by_id")
       .notNull()
       .references(() => users.id),
+    title: text("title"),
     content: text("content").notNull(),
     requestType: text("request_type", { enum: requestTypes }).notNull(),
     priority: text("priority", { enum: requestPriorities }).notNull().default("NORMAL"),

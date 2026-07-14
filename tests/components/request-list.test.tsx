@@ -17,6 +17,7 @@ function requestDto(
     requestNumber: "REQ-000007",
     projectId: 2,
     createdById: 3,
+    title: "保存按钮没有响应",
     content: "保存按钮点击后没有响应，需要修复。",
     summary: "保存按钮点击后没有响应，需要修复。",
     requestType: "BUG",
@@ -60,16 +61,30 @@ describe("RequestList", () => {
     expect(within(row).getByText("王客户")).toBeVisible();
     expect(within(row).getByText("加急")).toBeVisible();
     expect(within(row).getByText("未排期")).toBeVisible();
+    expect(within(row).getByRole("link", { name: "保存按钮没有响应" })).toBeVisible();
   });
 
-  it("renders customer content as plain text instead of HTML", () => {
+  it("shows a fill-title action instead of deriving a title from legacy content", () => {
+    render(
+      <RequestList
+        role="CUSTOMER"
+        actorId={3}
+        items={[requestDto({ title: null, needsCustomerReply: false })]}
+      />,
+    );
+    const row = screen.getByTestId("request-row-REQ-000007");
+    expect(within(row).getByText("待补充标题")).toBeVisible();
+    expect(within(row).getByRole("link", { name: "补充标题" })).toBeVisible();
+    expect(within(row).queryByText("保存按钮点击后没有响应，需要修复。")).toBeNull();
+  });
+
+  it("renders customer titles as plain text instead of HTML", () => {
     const { container } = render(
       <RequestList
         role="CUSTOMER"
         items={[
           requestDto({
-            content: "<b>不要执行</b>，这里是用户输入。",
-            summary: "<b>不要执行</b>，这里是用户输入。",
+            title: "<b>不要执行</b>，这里是用户输入。",
             needsCustomerReply: false,
           }),
         ]}

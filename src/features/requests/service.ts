@@ -33,15 +33,17 @@ import { DomainError } from "@/lib/domain-error";
 
 import { deriveNeedsCustomerReply } from "../communication/policy";
 import { requireActiveCustomerProject } from "../projects/authorization";
-import { assertValidStateCombination, canEditRequest, decidePause } from "./policy";
+import { assertValidStateCombination, canEditRequest, canFillLegacyRequestTitle, decidePause } from "./policy";
 import { presentRequest, type RequestDto } from "./presenter";
 import {
   changeProgressSchema,
   createRequestSchema,
+  fillLegacyRequestTitleSchema,
   requestLifecycleSchema,
   updateOwnRequestSchema,
   type ChangeProgressInput,
   type CreateRequestInput,
+  type FillLegacyRequestTitleInput,
   type RequestLifecycleInput,
   type UpdateOwnRequestInput,
 } from "./schemas";
@@ -105,12 +107,14 @@ function authorizeActor(actor: AuthenticatedUser): ActionFailure | null {
 
 function fingerprintCreatePayload(input: {
   projectId: number;
+  title: string;
   content: string;
   requestType: Request["requestType"];
   priority: Request["priority"];
 }): string {
   const normalizedPayload = JSON.stringify({
     projectId: input.projectId,
+    title: input.title,
     content: input.content,
     requestType: input.requestType,
     priority: input.priority,
@@ -234,6 +238,7 @@ function updateWithEvent(
     Pick<
       Request,
       | "content"
+      | "title"
       | "requestType"
       | "priority"
       | "progressStatus"
@@ -323,6 +328,7 @@ export async function createRequest(
       .values({
         projectId: parsed.data.projectId,
         createdById: currentActor.id,
+        title: parsed.data.title,
         content: parsed.data.content,
         requestType: parsed.data.requestType,
         priority: parsed.data.priority,
@@ -376,10 +382,47 @@ export async function updateOwnRequest(
       currentActor,
       current,
       {
+        title: parsed.data.title,
         content: parsed.data.content,
         requestType: parsed.data.requestType,
         priority: parsed.data.priority,
       },
+      "REQUEST_UPDATED",
+      null,
+    );
+  });
+  if (!write.ok) return write.result;
+  return actionSuccess(presentRequest(write.data));
+}
+
+export async function fillLegacyRequestTitle(
+  database: AppDatabase,
+  actor: AuthenticatedUser,
+  input: FillLegacyRequestTitleInput,
+): Promise<ActionResult<RequestDto>> {
+  const denied = authorizeRole(actor, "CUSTOMER");
+  if (denied) return denied;
+  const parsed = parseInput(fillLegacyRequestTitleSchema, input);
+  if (!parsed.ok) return parsed.result;
+
+  const write = runRequestWrite(database, actor, (currentActor) => {
+    const current = requireMutableRequestAccess(
+      database,
+      currentActor,
+      parsed.data.requestId,
+    );
+    assertExpectedVersion(current, parsed.data.expectedVersion);
+    if (!canFillLegacyRequestTitle(currentActor, current)) {
+      throw new DomainError(
+        current.title === null ? "FORBIDDEN" : "CONFLICT",
+        current.title === null ? "无权补充该需求标题" : "需求标题已经补充",
+      );
+    }
+    return updateWithEvent(
+      database,
+      currentActor,
+      current,
+      { title: parsed.data.title },
       "REQUEST_UPDATED",
       null,
     );

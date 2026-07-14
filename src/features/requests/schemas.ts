@@ -12,6 +12,8 @@ import {
   MAX_REQUEST_PAGE_SIZE,
   REQUEST_CONTENT_MAX_LENGTH,
   REQUEST_CONTENT_MIN_LENGTH,
+  REQUEST_TITLE_MAX_LENGTH,
+  REQUEST_TITLE_MIN_LENGTH,
 } from "./constants";
 
 const requestIdSchema = z.number().int().positive();
@@ -21,6 +23,11 @@ const contentSchema = z
   .trim()
   .min(REQUEST_CONTENT_MIN_LENGTH, "需求正文至少需要 10 个字符")
   .max(REQUEST_CONTENT_MAX_LENGTH, "需求正文不能超过 10000 个字符");
+export const requestTitleSchema = z
+  .string()
+  .trim()
+  .min(REQUEST_TITLE_MIN_LENGTH, "需求标题不能为空")
+  .max(REQUEST_TITLE_MAX_LENGTH, "需求标题不能超过 100 个字符");
 const requestTypeSchema = z.enum(requestTypes);
 const prioritySchema = z.enum(requestPriorities);
 const progressStatusSchema = z.enum(requestProgressStatuses);
@@ -47,6 +54,7 @@ const idempotencyKeySchema = z
 export const createRequestSchema = z
   .object({
     projectId: requestIdSchema,
+    title: requestTitleSchema,
     content: contentSchema,
     requestType: requestTypeSchema,
     priority: prioritySchema.optional().default("NORMAL"),
@@ -58,9 +66,18 @@ export const updateOwnRequestSchema = z
   .object({
     requestId: requestIdSchema,
     expectedVersion: expectedVersionSchema,
+    title: requestTitleSchema,
     content: contentSchema,
     requestType: requestTypeSchema,
     priority: prioritySchema,
+  })
+  .strict();
+
+export const fillLegacyRequestTitleSchema = z
+  .object({
+    requestId: requestIdSchema,
+    expectedVersion: expectedVersionSchema,
+    title: requestTitleSchema,
   })
   .strict();
 
@@ -106,6 +123,7 @@ export const listRequestsSchema = z
 
 export type CreateRequestInput = z.input<typeof createRequestSchema>;
 export type UpdateOwnRequestInput = z.input<typeof updateOwnRequestSchema>;
+export type FillLegacyRequestTitleInput = z.input<typeof fillLegacyRequestTitleSchema>;
 export type ChangeProgressInput = z.input<typeof changeProgressSchema>;
 export type RequestLifecycleInput = z.input<typeof requestLifecycleSchema>;
 export type ListRequestsInput = z.input<typeof listRequestsSchema>;

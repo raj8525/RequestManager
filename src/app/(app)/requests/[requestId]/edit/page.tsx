@@ -9,7 +9,7 @@ import { buttonClassName } from "@/components/ui/button";
 import { getRuntimeDatabase } from "@/db/runtime";
 import { listAuthorizedAttachments } from "@/features/attachments/queries";
 import { RequestForm } from "@/features/requests/components/request-form";
-import { canEditRequest } from "@/features/requests/policy";
+import { canEditRequest, canFillLegacyRequestTitle } from "@/features/requests/policy";
 import { getRequestDetail } from "@/features/requests/queries";
 import { parseRequestNumber } from "@/lib/request-number";
 
@@ -26,10 +26,12 @@ export default async function EditRequestPage({
   const requestId = parseRequestNumber(value) ?? Number(value);
   if (!Number.isSafeInteger(requestId) || requestId <= 0) notFound();
   const result = getRequestDetail(database, actor, requestId);
+  const canEdit = result.ok && canEditRequest(actor, result.data);
+  const canFillTitle = result.ok && canFillLegacyRequestTitle(actor, result.data);
   if (
     !result.ok ||
     !result.data.project.isActive ||
-    !canEditRequest(actor, result.data)
+    (!canEdit && !canFillTitle)
   ) {
     notFound();
   }
@@ -40,8 +42,8 @@ export default async function EditRequestPage({
     <div className="page-stack page-stack--form">
       <PageHeader
         eyebrow={result.data.requestNumber}
-        title="编辑需求"
-        description="只有正常且未排期的本人需求可以修改。"
+        title={canFillTitle ? "补充标题" : "编辑需求"}
+        description={canFillTitle ? "为历史需求补充一次标题，原内容和状态保持不变。" : "只有正常且未排期的本人需求可以修改。"}
         actions={
           <Link
             href={`/requests/${result.data.requestNumber}`}
@@ -53,10 +55,10 @@ export default async function EditRequestPage({
         }
       />
       <RequestForm
-        mode="edit"
+        mode={canFillTitle ? "fill-title" : "edit"}
         projects={[result.data.project]}
         initialRequest={result.data}
-        initialAttachments={attachments.data}
+        initialAttachments={canFillTitle ? [] : attachments.data}
       />
     </div>
   );

@@ -7,9 +7,22 @@ import { DomainError } from "@/lib/domain-error";
 
 export type RequestPolicySubject = {
   createdById: number;
+  title: string | null;
   progressStatus: RequestProgressStatus;
   recordStatus: RequestRecordStatus;
 };
+
+export function canFillLegacyRequestTitle(
+  actor: AuthenticatedUser,
+  request: RequestPolicySubject,
+): boolean {
+  return (
+    !actor.mustChangePassword &&
+    actor.role === "CUSTOMER" &&
+    actor.id === request.createdById &&
+    request.title === null
+  );
+}
 
 export type PolicyDecision =
   | { allowed: true }

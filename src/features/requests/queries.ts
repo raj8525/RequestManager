@@ -190,10 +190,12 @@ function filterConditions(
   if (filters.search) {
     const requestId = parseRequestNumber(filters.search);
     const contentMatch = sql`instr(lower(${requests.content}), lower(${filters.search})) > 0`;
+    const titleMatch = sql`instr(lower(coalesce(${requests.title}, '')), lower(${filters.search})) > 0`;
+    const textMatch = or(titleMatch, contentMatch) as SQL;
     conditions.push(
       requestId === null
-        ? contentMatch
-        : (or(eq(requests.id, requestId), contentMatch) as SQL),
+        ? textMatch
+        : (or(eq(requests.id, requestId), textMatch) as SQL),
     );
   }
   return conditions;

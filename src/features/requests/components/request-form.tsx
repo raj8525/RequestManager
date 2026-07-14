@@ -52,7 +52,7 @@ export function RequestForm({
   initialRequest,
   initialAttachments = [],
 }: {
-  mode: "create" | "edit";
+  mode: "create" | "edit" | "fill-title";
   projects: readonly RequestProjectOption[];
   initialRequest?: RequestDto;
   initialAttachments?: readonly AttachmentDto[];
@@ -60,6 +60,7 @@ export function RequestForm({
   const [projectId, setProjectId] = useState(
     String(initialRequest?.projectId ?? projects[0]?.id ?? ""),
   );
+  const [title, setTitle] = useState(initialRequest?.title ?? "");
   const [content, setContent] = useState(initialRequest?.content ?? "");
   const [requestType, setRequestType] = useState(
     initialRequest?.requestType ?? "BUG",
@@ -83,18 +84,27 @@ export function RequestForm({
 
     const formData = new FormData();
     formData.set("projectId", projectId);
-    formData.set("content", content);
-    formData.set("requestType", requestType);
-    formData.set("priority", priority);
+    formData.set("title", title);
+    if (mode !== "fill-title") {
+      formData.set("content", content);
+      formData.set("requestType", requestType);
+      formData.set("priority", priority);
+    }
     if (mode === "create") {
       formData.set("idempotencyKey", idempotencyKey.current);
     } else if (initialRequest) {
       formData.set("expectedVersion", String(initialRequest.version));
-      for (const attachment of retainedAttachments) {
-        formData.append("retainedAttachmentIds", String(attachment.id));
+      if (mode === "fill-title") {
+        formData.set("editMode", "fill-title");
+      } else {
+        for (const attachment of retainedAttachments) {
+          formData.append("retainedAttachmentIds", String(attachment.id));
+        }
       }
     }
-    for (const file of newFiles) formData.append("attachments", file, file.name);
+    if (mode !== "fill-title") {
+      for (const file of newFiles) formData.append("attachments", file, file.name);
+    }
 
     try {
       const endpoint =
@@ -120,8 +130,9 @@ export function RequestForm({
   }
 
   const contentError = fieldErrors.content;
+  const titleError = fieldErrors.title;
   const attachmentError = fieldErrors.attachments;
-  const formLabel = mode === "create" ? "新建需求" : "编辑需求";
+  const formLabel = mode === "create" ? "新建需求" : mode === "edit" ? "编辑需求" : "补充标题";
 
   return (
     <form aria-label={formLabel} className="request-form" onSubmit={handleSubmit}>
@@ -136,13 +147,44 @@ export function RequestForm({
         </div>
       ) : null}
 
+      <Field
+        label="标题"
+        htmlFor="title"
+        hint="用一句话概括需求，最多 100 个字符。"
+        error={titleError}
+        required
+      >
+        <input
+          id="title"
+          name="title"
+          aria-label="标题"
+          value={title}
+          maxLength={100}
+          required
+          disabled={isPending}
+          aria-invalid={titleError ? true : undefined}
+          aria-describedby={fieldDescriptionIds("title", {
+            hint: true,
+            error: Boolean(titleError),
+          })}
+          onChange={(event) => setTitle(event.currentTarget.value)}
+        />
+      </Field>
+
+      {mode === "fill-title" ? (
+        <div className="form-alert" role="status">
+          此历史需求只能补充一次标题，原需求内容和状态不会改变。
+        </div>
+      ) : null}
+
+      {mode !== "fill-title" ? <>
       <div className="form-grid form-grid--three">
         <Field label="项目" htmlFor="projectId" error={fieldErrors.projectId} required>
           <select
             id="projectId"
             aria-label="项目"
             value={projectId}
-            disabled={mode === "edit" || projects.length === 0 || isPending}
+            disabled={mode !== "create" || projects.length === 0 || isPending}
             aria-invalid={fieldErrors.projectId ? true : undefined}
             aria-describedby={fieldDescriptionIds("projectId", {
               error: Boolean(fieldErrors.projectId),
@@ -261,6 +303,7 @@ export function RequestForm({
           </p>
         ) : null}
       </div>
+      </> : null}
 
       <div className="form-actions">
         <Button
@@ -276,7 +319,9 @@ export function RequestForm({
             ? "正在提交"
             : mode === "create"
               ? "提交需求"
-              : "保存修改"}
+              : mode === "edit"
+                ? "保存修改"
+                : "保存标题"}
         </Button>
       </div>
     </form>

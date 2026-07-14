@@ -81,7 +81,7 @@ describe("explicit migration and first-developer bootstrap", () => {
     expect(log).toMatchObject({
       event: "database_migrated",
       beforeVersion: 0,
-      afterVersion: 4,
+      afterVersion: 5,
     });
   });
 

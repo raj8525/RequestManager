@@ -74,6 +74,7 @@ export function createPostHandler(
       actor,
       {
         projectId: Number(formString(form, "projectId")),
+        title: formString(form, "title") ?? "",
         content: formString(form, "content") ?? "",
         requestType: formString(form, "requestType") ?? "",
         ...(priority === undefined ? {} : { priority }),

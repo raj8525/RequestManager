@@ -172,7 +172,7 @@ export function RequestList({
                     href={`/requests/${item.requestNumber}`}
                     className="request-table__summary"
                   >
-                    {item.summary}
+                    {item.title ?? "待补充标题"}
                   </Link>
                 </td>
                 <td data-label="项目">{item.project.name}</td>
