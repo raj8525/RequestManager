@@ -79,7 +79,7 @@ test("runs the customer and developer request lifecycle with simple clarificatio
   await expect(page.getByLabel("更新进度")).toHaveValue("SCHEDULED");
 
   await fillHydrated(
-    page.getByLabel("添加客户可见备注").getByRole("textbox"),
+    page.getByLabel("添加备注").getByRole("textbox"),
     publicRemark,
   );
   await page.getByRole("button", { name: "添加备注" }).click();

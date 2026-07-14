@@ -91,7 +91,8 @@ describe("RequestDetail", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "客户可见备注" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "备注" })).toBeVisible();
+    expect(screen.queryByText("客户可见备注")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "确认与澄清" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "私人笔记" })).toBeVisible();
     expect(screen.getByDisplayValue("仅当前开发者可见")).toBeVisible();

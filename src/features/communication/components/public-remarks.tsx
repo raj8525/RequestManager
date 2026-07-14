@@ -71,7 +71,7 @@ export function PublicRemarks({
     <section className="detail-section" aria-labelledby="remarks-heading">
       <div className="detail-section__heading">
         <MessageSquareText aria-hidden="true" size={18} />
-        <h2 id="remarks-heading">客户可见备注</h2>
+        <h2 id="remarks-heading">备注</h2>
       </div>
       {remarks.length === 0 ? (
         <p className="section-empty">暂无备注</p>
@@ -91,8 +91,8 @@ export function PublicRemarks({
         </ol>
       )}
       {role === "DEVELOPER" && recordStatus === "ACTIVE" ? (
-        <form className="inline-compose" onSubmit={submit} aria-label="添加客户可见备注">
-          <label htmlFor="public-remark">添加客户可见备注</label>
+        <form className="inline-compose" onSubmit={submit} aria-label="添加备注">
+          <label htmlFor="public-remark">添加备注</label>
           <textarea
             id="public-remark"
             rows={3}

@@ -12,7 +12,7 @@ const eventLabels: Record<RequestHistoryEventDto["eventType"], string> = {
   REQUEST_RESTORED: "恢复了归档需求",
   ATTACHMENT_ADDED: "添加了截图",
   ATTACHMENT_REMOVED: "移除了截图",
-  PUBLIC_REMARK_ADDED: "添加了客户可见备注",
+  PUBLIC_REMARK_ADDED: "添加了备注",
   CLARIFICATION_ASKED: "提出了澄清问题",
   CLARIFICATION_REPLIED: "回复了澄清问题",
 };

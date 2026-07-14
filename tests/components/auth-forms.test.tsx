@@ -42,6 +42,25 @@ describe("account forms", () => {
     expect(screen.getByLabelText("用户名")).toHaveValue("customer.one");
   });
 
+  it("submits login when Enter is pressed in the password field", async () => {
+    const action = vi.fn().mockResolvedValue({
+      ok: false,
+      code: "INVALID_CREDENTIALS",
+      message: "用户名或密码错误",
+    });
+    render(<LoginForm submitAction={action} />);
+
+    fireEvent.change(screen.getByLabelText("用户名"), {
+      target: { value: "customer.one" },
+    });
+    const password = screen.getByLabelText("密码");
+    fireEvent.change(password, { target: { value: "not-correct" } });
+    fireEvent.keyDown(password, { key: "Enter", code: "Enter" });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("用户名或密码错误");
+    expect(action).toHaveBeenCalledTimes(1);
+  });
+
   it("prevents a password change when the confirmation differs", async () => {
     const action = vi.fn();
     render(<PasswordForm username="customer.one" submitAction={action} />);

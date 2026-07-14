@@ -67,6 +67,11 @@ export function LoginForm({
           type="password"
           autoComplete="current-password"
           required
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+            event.preventDefault();
+            event.currentTarget.form?.requestSubmit();
+          }}
         />
       </Field>
       <Button type="submit" disabled={isPending} className="button--full">

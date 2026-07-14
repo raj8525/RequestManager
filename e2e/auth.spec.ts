@@ -6,7 +6,7 @@ test("redirects anonymous users and keeps login failures generic", async ({ page
 
   await page.getByLabel("用户名").fill("does-not-exist");
   await page.getByLabel("密码").fill("incorrect password");
-  await page.getByRole("button", { name: "登录" }).click();
+  await page.getByLabel("密码").press("Enter");
   await expect(page.locator(".form-alert[role='alert']")).toHaveText(
     "用户名或密码错误",
   );
