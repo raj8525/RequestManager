@@ -18,7 +18,14 @@ curl -fsSL https://raw.githubusercontent.com/raj8525/RequestManager/main/scripts
   | bash -s -- deploy --origin http://47.121.188.131:13001
 ```
 
-更新版本时重复执行相同命令。脚本先用旧版本创建完整备份，构建成功后才停服；迁移或健康检查失败会尝试恢复旧数据和旧镜像。
+服务器无法稳定访问 GitHub，或者希望从本机只发布代码时，在本机仓库目录执行：
+
+```bash
+./scripts/deploy-ubuntu.sh update root@SERVER_IP \
+  --origin http://SERVER_IP:13001
+```
+
+`update` 只上传当前已推送的 Git 修订，不上传或覆盖本机 SQLite 和截图。服务器仍会在更新前保护性备份现有数据，并执行新代码所需的幂等迁移；构建、迁移或健康检查失败会尝试恢复旧数据和旧镜像。
 
 ## 完整数据同步
 

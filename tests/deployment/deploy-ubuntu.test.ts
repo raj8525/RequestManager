@@ -64,6 +64,7 @@ describe("Ubuntu deployment command", () => {
 
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout).toContain("deploy");
+    expect(result.stdout).toContain("update SSH_TARGET");
     expect(result.stdout).toContain("sync SSH_TARGET");
     expect(result.stdout).toContain("status");
     expect(result.stdout).toContain("logs");
@@ -103,13 +104,16 @@ describe("Ubuntu deployment command", () => {
     expect(`${result.stdout}${result.stderr}`).not.toContain(secretUrl);
   });
 
-  test("rejects an unsafe SSH target before running remote commands", () => {
-    const result = runScript(["sync", "root@example.com;id"]);
+  test.each(["update", "sync"])(
+    "%s rejects an unsafe SSH target before running remote commands",
+    (command) => {
+      const result = runScript([command, "root@example.com;id"]);
 
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain("invalid SSH target");
-    expect(result.calls).toEqual([]);
-  });
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("invalid SSH target");
+      expect(result.calls).toEqual([]);
+    },
+  );
 });
 
 describe("deployment safety contract", () => {
@@ -164,7 +168,10 @@ describe("deployment safety contract", () => {
   });
 
   test("sync uses a complete application backup before SSH and scp", () => {
-    const body = source.slice(source.indexOf("sync_to_server()"));
+    const body = source.slice(
+      source.indexOf("release_to_server()"),
+      source.indexOf("receive_uploaded_backup()"),
+    );
 
     expect(body.indexOf("npm run ops:backup")).toBeGreaterThanOrEqual(0);
     expect(body.indexOf("bundle create")).toBeGreaterThan(
@@ -179,6 +186,30 @@ describe("deployment safety contract", () => {
     expect(body).not.toContain("request-manager.db-wal");
   });
 
+  test("update uploads only a Git bundle and never replaces remote data", () => {
+    const updateCommand = source.slice(
+      source.indexOf("command_update()"),
+      source.indexOf("command_sync()"),
+    );
+    const releaseBody = source.slice(
+      source.indexOf("release_to_server()"),
+      source.indexOf("receive_uploaded_backup()"),
+    );
+
+    expect(updateCommand).toContain(
+      'release_to_server "${target}" "${ssh_port}" "${origin}" "${app_port}" false',
+    );
+    expect(releaseBody).toContain("git -C \"${repository_root}\" bundle create");
+    expect(releaseBody).toContain("remote_deploy_bundle");
+    expect(releaseBody).toContain('if [[ "${replace_data}" == "true" ]]');
+    expect(releaseBody.indexOf("npm run ops:backup")).toBeGreaterThan(
+      releaseBody.indexOf('if [[ "${replace_data}" == "true" ]]'),
+    );
+    expect(releaseBody.indexOf("__receive-backup")).toBeGreaterThan(
+      releaseBody.indexOf('if [[ "${replace_data}" == "true" ]]'),
+    );
+  });
+
   test("sync staging avoids symlinked system temporary directories", () => {
     expect(source).toContain(
       'mktemp -d "${HOME}/.request-manager-sync.XXXXXX"',
@@ -187,7 +218,10 @@ describe("deployment safety contract", () => {
   });
 
   test("sync reuses one authenticated SSH connection for every upload step", () => {
-    const body = source.slice(source.indexOf("sync_to_server()"));
+    const body = source.slice(
+      source.indexOf("release_to_server()"),
+      source.indexOf("receive_uploaded_backup()"),
+    );
 
     expect(source).toContain("ControlMaster=auto");
     expect(source).toContain("ControlPersist=60");
@@ -416,6 +450,9 @@ describe("deployment documentation contract", () => {
       const text = readFileSync(resolve(root, path), "utf8");
 
       expect(text).toContain("deploy --origin http://SERVER_IP:13001");
+      expect(text).toContain(
+        "./scripts/deploy-ubuntu.sh update root@SERVER_IP",
+      );
       expect(text).toContain(
         "./scripts/deploy-ubuntu.sh sync root@SERVER_IP",
       );

@@ -37,17 +37,19 @@ run() {
 
 usage() {
   cat <<'USAGE'
-RequestManager Ubuntu deployment and complete-data synchronization
+RequestManager Ubuntu deployment, code update and complete-data synchronization
 
 Usage:
   deploy-ubuntu.sh deploy [--origin URL] [--port PORT] [--revision REF]
                            [--repo URL] [--skip-admin] [--no-firewall]
+  deploy-ubuntu.sh update SSH_TARGET [--ssh-port PORT] [--origin URL] [--port PORT]
   deploy-ubuntu.sh sync SSH_TARGET [--ssh-port PORT] [--origin URL] [--port PORT]
   deploy-ubuntu.sh status
   deploy-ubuntu.sh logs
 
 Commands:
   deploy  Install or update one Docker deployment on Ubuntu.
+  update  Upload and deploy code while preserving remote application data.
   sync    Back up local SQLite and screenshots, then replace remote data.
   status  Show the deployed revision, container state and health.
   logs    Follow the last 200 application log lines.
@@ -135,6 +137,32 @@ command_deploy() {
   deploy_server "${origin}" "${port}" "${revision}" "${repository}" "${skip_admin}" "${configure_firewall}"
 }
 
+command_update() {
+  (($# >= 1)) || die "update requires an SSH target"
+  local target="$1"
+  shift
+  validate_ssh_target "${target}"
+  local ssh_port="22"
+  local app_port="${DEFAULT_PORT}"
+  local origin=""
+  while (($#)); do
+    case "$1" in
+      --ssh-port) (($# >= 2)) || die "--ssh-port requires a value"; ssh_port="$2"; shift 2 ;;
+      --port) (($# >= 2)) || die "--port requires a value"; app_port="$2"; shift 2 ;;
+      --origin) (($# >= 2)) || die "--origin requires a value"; origin="$2"; shift 2 ;;
+      *) die "unknown update option" ;;
+    esac
+  done
+  validate_port "${ssh_port}"
+  validate_port "${app_port}"
+  if [[ -z "${origin}" ]]; then
+    local host="${target#*@}"
+    origin="http://${host}:${app_port}"
+  fi
+  validate_origin "${origin}"
+  release_to_server "${target}" "${ssh_port}" "${origin}" "${app_port}" false
+}
+
 command_sync() {
   (($# >= 1)) || die "sync requires an SSH target"
   local target="$1"
@@ -158,7 +186,7 @@ command_sync() {
     origin="http://${host}:${app_port}"
   fi
   validate_origin "${origin}"
-  sync_to_server "${target}" "${ssh_port}" "${origin}" "${app_port}"
+  release_to_server "${target}" "${ssh_port}" "${origin}" "${app_port}" true
 }
 
 command_status() {
@@ -552,11 +580,13 @@ remote_deploy_bundle() {
   remote_root_script "${target}" "${ssh_port}" __deploy-bundle "${source_bundle}" "${revision}" "${origin}" "${port}"
 }
 
-sync_to_server() {
+release_to_server() {
   local target="$1"
   local ssh_port="$2"
   local origin="$3"
   local port="$4"
+  local replace_data="$5"
+  [[ "${replace_data}" == "true" || "${replace_data}" == "false" ]] || die "invalid release mode"
   local script_path
   script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
   local repository_root
@@ -587,12 +617,15 @@ sync_to_server() {
   ssh_control_root="$(mktemp -d /tmp/request-manager-ssh.XXXXXX)"
   chmod 0700 "${ssh_control_root}"
   SSH_CONTROL_PATH="${ssh_control_root}/control"
-  mkdir -p "${temporary_root}/backups"
-  (cd "${repository_root}" && BACKUP_PATH="${temporary_root}/backups" npm run ops:backup)
-  local backups=("${temporary_root}"/backups/request-manager-*)
-  [[ ${#backups[@]} == 1 && -d "${backups[0]}" ]] || die "local backup did not produce exactly one complete directory"
-  local backup="${backups[0]}"
-  confirm_sync "${target}" "${revision}" "${backup}"
+  local backup=""
+  if [[ "${replace_data}" == "true" ]]; then
+    mkdir -p "${temporary_root}/backups"
+    (cd "${repository_root}" && BACKUP_PATH="${temporary_root}/backups" npm run ops:backup)
+    local backups=("${temporary_root}"/backups/request-manager-*)
+    [[ ${#backups[@]} == 1 && -d "${backups[0]}" ]] || die "local backup did not produce exactly one complete directory"
+    backup="${backups[0]}"
+    confirm_sync "${target}" "${revision}" "${backup}"
+  fi
 
   local source_bundle="${temporary_root}/request-manager-${revision}.bundle"
   run git -C "${repository_root}" bundle create "${source_bundle}" HEAD
@@ -605,14 +638,20 @@ sync_to_server() {
   scp_transport "${ssh_port}" -- "${source_bundle}" "${target}:${remote_bundle}"
   remote_deploy_bundle "${target}" "${ssh_port}" "${revision}" "${origin}" "${port}" "${remote_bundle}"
 
-  local remote_name
-  remote_name="$(basename "${backup}")-$(date +%s)-$$"
-  local remote_path="${remote_home}/.request-manager-sync/${remote_name}"
-  scp_transport "${ssh_port}" -r -- "${backup}" "${target}:${remote_path}"
-  remote_root_script "${target}" "${ssh_port}" __receive-backup "${remote_path}" "${port}"
+  if [[ "${replace_data}" == "true" ]]; then
+    local remote_name
+    remote_name="$(basename "${backup}")-$(date +%s)-$$"
+    local remote_path="${remote_home}/.request-manager-sync/${remote_name}"
+    scp_transport "${ssh_port}" -r -- "${backup}" "${target}:${remote_path}"
+    remote_root_script "${target}" "${ssh_port}" __receive-backup "${remote_path}" "${port}"
+  fi
   cleanup_sync_temp
   trap - EXIT
-  log "Complete database and screenshot synchronization succeeded."
+  if [[ "${replace_data}" == "true" ]]; then
+    log "Complete database and screenshot synchronization succeeded."
+  else
+    log "Code update succeeded; remote database and screenshots were preserved."
+  fi
 }
 
 receive_uploaded_backup() {
@@ -691,6 +730,7 @@ main() {
   case "${command}" in
     --help|-h|help) usage ;;
     deploy) command_deploy "$@" ;;
+    update) command_update "$@" ;;
     sync) command_sync "$@" ;;
     status) command_status "$@" ;;
     logs) command_logs "$@" ;;
