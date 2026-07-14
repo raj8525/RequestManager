@@ -1,18 +1,28 @@
 "use client";
 
 import { MessageSquarePlus, Send } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ScreenshotInput } from "@/features/attachments/screenshot-input";
 
+function createIdempotencyKey(): string {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  return `question-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function DeveloperQuestionForm({ projects, question, role }: { projects?: Array<{ id: number; code: string; name: string }>; question?: { id: number; questionNumber: string; version: number }; role?: "CUSTOMER" | "DEVELOPER" }) {
   const [files, setFiles] = useState<File[]>([]); const [pending, setPending] = useState(false); const [error, setError] = useState<string | null>(null);
+  const idempotencyKey = useRef(createIdempotencyKey());
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (pending) return; setPending(true); setError(null);
-    const form = new FormData(event.currentTarget); form.set("idempotencyKey", crypto.randomUUID()); for (const file of files) form.append("attachments", file);
-    if (question) form.set("expectedVersion", String(question.version));
-    const url = question ? `/api/developer-questions/${question.questionNumber}/messages` : "/api/developer-questions";
-    try { const response = await fetch(url, { method: "POST", body: form }); const result = await response.json(); if (!result.ok) { setError(result.message); return; } window.location.assign(question ? `/questions/${question.questionNumber}` : `/questions/${result.data.questionNumber}`); } catch { setError("系统暂时不可用，请稍后重试"); } finally { setPending(false); }
+    try {
+      const form = new FormData(event.currentTarget); form.set("idempotencyKey", idempotencyKey.current); for (const file of files) form.append("attachments", file);
+      if (question) form.set("expectedVersion", String(question.version));
+      const url = question ? `/api/developer-questions/${question.questionNumber}/messages` : "/api/developer-questions";
+      const response = await fetch(url, { method: "POST", body: form }); const result = await response.json(); if (!result.ok) { setError(result.message); return; } window.location.assign(question ? `/questions/${question.questionNumber}` : `/questions/${result.data.questionNumber}`);
+    } catch { setError("系统暂时不可用，请稍后重试"); } finally { setPending(false); }
   }
   return <form className="question-form" onSubmit={submit} data-screenshot-paste-target="true">
     {error ? <div className="form-alert form-alert--error" role="alert">{error}</div> : null}

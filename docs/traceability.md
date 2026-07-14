@@ -16,6 +16,7 @@
 | `COMM-02` | 每位开发者一份仅本人可见私人笔记 | `src/features/communication/queries.ts`、`private-note-editor.tsx` | `tests/integration/communication`、`e2e/private-notes.spec.ts` |
 | `COMM-03` | 提问标红置顶、回复清除、再次提问重现 | `src/features/communication`、客户排序查询 | `tests/integration/communication`、`e2e/request-lifecycle.spec.ts` |
 | `COMM-04` | 公开操作历史 | `request_events`、`request-history.tsx` | `tests/integration/requests/request-events.test.ts`、`tests/components/request-history.test.tsx` |
+| `COMM-05` | 开发者提问、双方截图回复、提醒转移和手动取消置顶 | `src/features/developer-questions`、`src/app/api/developer-questions` | `tests/components/developer-question-form.test.tsx`、`tests/integration/developer-questions`、`e2e/developer-questions.spec.ts` |
 | `ATT-01` | 选择、拖放、粘贴、预览和移除截图 | `src/features/attachments/screenshot-input.tsx` | `tests/components/screenshot-input.test.tsx`、`e2e/request-lifecycle.spec.ts` |
 | `ATT-02` | 文件类型、大小、数量、总量和魔数验证 | `src/features/attachments/validation.ts` | `tests/unit/attachments`、`tests/integration/attachments` |
 | `ATT-03` | 截图不在 public，按会话和项目鉴权 | `src/app/api/attachments`、`authorization.ts` | `tests/integration/attachments`、`e2e/access-control.spec.ts` |

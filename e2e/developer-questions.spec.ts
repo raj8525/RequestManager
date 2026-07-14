@@ -1,6 +1,12 @@
 import { expect, loginAs, test } from "./fixtures";
 
 test("developer question moves attention between customer and developer", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(globalThis.crypto, "randomUUID", {
+      configurable: true,
+      value: undefined,
+    });
+  });
   await loginAs(page, "developerA");
   await page.goto("/questions/new");
   await page.getByLabel("项目").selectOption({ label: "PROJECT-A · Project A" });
