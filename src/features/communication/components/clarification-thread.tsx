@@ -48,6 +48,8 @@ export function ClarificationThread({
     recordStatus === "ACTIVE" &&
     (role === "DEVELOPER" || (role === "CUSTOMER" && needsCustomerReply));
 
+  if (messages.length === 0 && !canCompose) return null;
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!content.trim() || pending || !canCompose) return;
@@ -80,7 +82,14 @@ export function ClarificationThread({
   }
 
   return (
-    <section className="detail-section" aria-labelledby="clarification-heading">
+    <section
+      className={
+        messages.length > 0
+          ? "detail-section detail-section--clarification-has-content"
+          : "detail-section"
+      }
+      aria-labelledby="clarification-heading"
+    >
       <div className="detail-section__heading">
         <CircleHelp aria-hidden="true" size={18} />
         <h2 id="clarification-heading">确认与澄清</h2>

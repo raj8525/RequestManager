@@ -43,6 +43,9 @@ export function PublicRemarks({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const key = useRef(idempotencyKey());
+  const canCompose = role === "DEVELOPER" && recordStatus === "ACTIVE";
+
+  if (remarks.length === 0 && !canCompose) return null;
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -103,7 +106,7 @@ export function PublicRemarks({
           ))}
         </ol>
       )}
-      {role === "DEVELOPER" && recordStatus === "ACTIVE" ? (
+      {canCompose ? (
         <form
           className="inline-compose"
           onSubmit={submit}

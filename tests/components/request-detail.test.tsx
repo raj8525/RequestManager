@@ -31,6 +31,62 @@ const request: RequestViewDto = {
 };
 
 describe("RequestDetail", () => {
+  it("hides empty customer communication sections", () => {
+    render(
+      <RequestDetail
+        actor={{ id: 3, role: "CUSTOMER" }}
+        request={{ ...request, needsCustomerReply: false }}
+        attachments={[]}
+        remarks={[]}
+        clarifications={[]}
+        events={[]}
+      />,
+    );
+
+    expect(screen.queryByRole("heading", { name: "备注" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "确认与澄清" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("marks populated clarification and completion sections with semantic colors", () => {
+    render(
+      <RequestDetail
+        actor={{ id: 3, role: "CUSTOMER" }}
+        request={{ ...request, needsCustomerReply: false }}
+        attachments={[]}
+        remarks={[]}
+        clarifications={[
+          {
+            id: 31,
+            requestId: 7,
+            author: { id: 8, displayName: "李开发" },
+            authorRole: "DEVELOPER",
+            content: "请确认复现步骤",
+            createdAt: new Date("2026-07-10T08:20:00.000Z"),
+          },
+        ]}
+        completionNote={{
+          id: 4,
+          requestId: 7,
+          content: "已完成",
+          updatedBy: { id: 8, displayName: "李开发" },
+          createdAt: new Date("2026-07-10T08:40:00.000Z"),
+          updatedAt: new Date("2026-07-10T08:40:00.000Z"),
+          attachments: [],
+        }}
+        events={[]}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "确认与澄清" }).closest("section"),
+    ).toHaveClass("detail-section--clarification-has-content");
+    expect(
+      screen.getByRole("heading", { name: "完成说明" }).closest("section"),
+    ).toHaveClass("detail-section--completion");
+  });
+
   it("assembles only customer-visible communication sections", () => {
     const { container } = render(
       <RequestDetail

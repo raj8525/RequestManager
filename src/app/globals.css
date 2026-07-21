@@ -1259,6 +1259,14 @@ summary:focus-visible {
   color: #5d5141;
 }
 
+.detail-section--completion .detail-section__heading {
+  color: var(--green);
+}
+
+.detail-section--clarification-has-content .detail-section__heading {
+  color: var(--amber);
+}
+
 .section-empty {
   color: var(--text-muted);
   margin: 0;

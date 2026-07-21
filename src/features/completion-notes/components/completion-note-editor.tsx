@@ -64,7 +64,10 @@ export function CompletionNoteEditor({
 
   const canEdit = role === "DEVELOPER" && recordStatus === "ACTIVE";
   return (
-    <section className="detail-section" aria-labelledby="completion-note-heading">
+    <section
+      className="detail-section detail-section--completion"
+      aria-labelledby="completion-note-heading"
+    >
       <div className="detail-section__heading">
         <CheckCircle2 aria-hidden="true" size={18} />
         <h2 id="completion-note-heading">完成说明</h2>
