@@ -9,6 +9,7 @@ import type { RequestViewDto } from "@/features/requests/presenter";
 
 afterEach(cleanup);
 
+
 const request: RequestViewDto = {
   id: 7,
   requestNumber: "REQ-000007",
@@ -43,6 +44,14 @@ describe("RequestDetail", () => {
             author: { id: 8, displayName: "李开发" },
             content: "公开给客户的备注",
             createdAt: new Date("2026-07-10T08:00:00.000Z"),
+            attachments: [{
+              id: 21,
+              originalName: "remark.png",
+              mimeType: "image/png",
+              sizeBytes: 100,
+              createdAt: new Date("2026-07-10T08:00:00.000Z"),
+              url: "/api/public-remark-attachments/21",
+            }],
           },
         ]}
         clarifications={[]}
@@ -52,13 +61,39 @@ describe("RequestDetail", () => {
             eventType: "PROGRESS_CHANGED",
             actor: { id: 8, displayName: "李开发" },
             change: { from: "UNSCHEDULED", to: "SCHEDULED" },
+            subject: null,
             createdAt: new Date("2026-07-10T08:30:00.000Z"),
           },
         ]}
+        completionNote={{
+          id: 4,
+          requestId: 7,
+          content: "已修复保存按钮并完成回归验证",
+          updatedBy: { id: 8, displayName: "李开发" },
+          createdAt: new Date("2026-07-10T08:40:00.000Z"),
+          updatedAt: new Date("2026-07-10T08:40:00.000Z"),
+          attachments: [{
+            id: 22,
+            originalName: "completed.png",
+            mimeType: "image/png",
+            sizeBytes: 120,
+            createdAt: new Date("2026-07-10T08:40:00.000Z"),
+            url: "/api/completion-note-attachments/22",
+          }],
+        }}
       />,
     );
 
     expect(screen.getByText("公开给客户的备注")).toBeVisible();
+    expect(screen.getByRole("img", { name: "remark.png" })).toHaveAttribute(
+      "src",
+      "/api/public-remark-attachments/21",
+    );
+    expect(screen.getByText("已修复保存按钮并完成回归验证")).toBeVisible();
+    expect(screen.getByRole("img", { name: "completed.png" })).toHaveAttribute(
+      "src",
+      "/api/completion-note-attachments/22",
+    );
     expect(screen.getByRole("heading", { name: "确认与澄清" })).toBeVisible();
     expect(screen.queryByText("私人笔记")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "提交回复" })).toBeVisible();
@@ -99,5 +134,7 @@ describe("RequestDetail", () => {
     expect(screen.getByRole("heading", { name: "私人笔记" })).toBeVisible();
     expect(screen.getByDisplayValue("仅当前开发者可见")).toBeVisible();
     expect(screen.getByRole("button", { name: "提出问题" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "保存完成说明" })).toBeVisible();
+    expect(screen.getAllByText("粘贴、拖放或选择截图").length).toBeGreaterThanOrEqual(3);
   });
 });

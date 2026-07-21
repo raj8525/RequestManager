@@ -13,6 +13,7 @@ import {
   listClarificationMessages,
   listPublicRemarks,
 } from "@/features/communication/queries";
+import { getCompletionNote } from "@/features/completion-notes/queries";
 import { RequestDetail } from "@/features/requests/components/request-detail";
 import { getRequestDetail, listRequestEvents } from "@/features/requests/queries";
 import { parseRequestNumber } from "@/lib/request-number";
@@ -48,8 +49,9 @@ export default async function RequestDetailPage({
   const attachments = listAuthorizedAttachments(database, actor, requestId);
   const remarks = listPublicRemarks(database, actor, requestId);
   const clarifications = listClarificationMessages(database, actor, requestId);
+  const completionNote = getCompletionNote(database, actor, requestId);
   const events = listRequestEvents(database, actor, requestId);
-  if (!attachments.ok || !remarks.ok || !clarifications.ok || !events.ok) notFound();
+  if (!attachments.ok || !remarks.ok || !clarifications.ok || !completionNote.ok || !events.ok) notFound();
 
   const privateNote =
     actor.role === "DEVELOPER"
@@ -76,6 +78,7 @@ export default async function RequestDetailPage({
         attachments={attachments.data}
         remarks={remarks.data}
         clarifications={clarifications.data}
+        completionNote={completionNote.data}
         privateNote={privateNote?.ok ? privateNote.data : undefined}
         events={events.data}
       />

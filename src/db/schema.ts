@@ -31,7 +31,6 @@ export const requestEventTypes = [
   "PUBLIC_REMARK_ADDED",
   "CLARIFICATION_ASKED",
   "CLARIFICATION_REPLIED",
-  "COMPLETION_NOTE_UPDATED",
 ] as const;
 export const requestEventVisibilities = ["PUBLIC", "DEVELOPER"] as const;
 export const developerQuestionAttentionStatuses = [
@@ -340,6 +339,7 @@ export const publicRemarks = sqliteTable(
       .references(() => users.id),
     content: text("content").notNull(),
     idempotencyKey: text("idempotency_key").notNull(),
+    payloadFingerprint: text("payload_fingerprint").notNull().default(""),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
       .default(nowInMilliseconds),
@@ -415,6 +415,7 @@ export const clarificationMessages = sqliteTable(
     authorRole: text("author_role", { enum: userRoles }).notNull(),
     content: text("content").notNull(),
     idempotencyKey: text("idempotency_key").notNull(),
+    payloadFingerprint: text("payload_fingerprint").notNull().default(""),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
       .default(nowInMilliseconds),
@@ -514,7 +515,7 @@ export const requestEvents = sqliteTable(
     index("request_events_request_id_idx").on(table.requestId, table.createdAt, table.id),
     check(
       "request_events_type_check",
-      sql`${table.eventType} in ('REQUEST_CREATED', 'REQUEST_UPDATED', 'PROGRESS_CHANGED', 'REQUEST_PAUSED', 'REQUEST_RESUMED', 'REQUEST_ARCHIVED', 'REQUEST_RESTORED', 'ATTACHMENT_ADDED', 'ATTACHMENT_REMOVED', 'PUBLIC_REMARK_ADDED', 'CLARIFICATION_ASKED', 'CLARIFICATION_REPLIED', 'COMPLETION_NOTE_UPDATED')`,
+      sql`${table.eventType} in ('REQUEST_CREATED', 'REQUEST_UPDATED', 'PROGRESS_CHANGED', 'REQUEST_PAUSED', 'REQUEST_RESUMED', 'REQUEST_ARCHIVED', 'REQUEST_RESTORED', 'ATTACHMENT_ADDED', 'ATTACHMENT_REMOVED', 'PUBLIC_REMARK_ADDED', 'CLARIFICATION_ASKED', 'CLARIFICATION_REPLIED')`,
     ),
     check(
       "request_events_visibility_check",

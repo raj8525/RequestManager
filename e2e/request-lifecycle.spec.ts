@@ -1,12 +1,16 @@
 import { expect, fillHydrated, loginAs, test } from "./fixtures";
 
-async function pasteScreenshot(page: import("@playwright/test").Page): Promise<void> {
+async function pasteScreenshot(
+  page: import("@playwright/test").Page,
+  target = page.getByLabel("需求内容"),
+  fileName = "pasted-screenshot.png",
+): Promise<void> {
   const screenshot = await import("node:fs/promises").then((fs) =>
     fs.readFile("e2e/fixtures/screenshot.png", "base64"),
   );
-  await page.getByLabel("需求内容").evaluate((element, base64) => {
+  await target.evaluate((element, { base64, fileName }) => {
     const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
-    const file = new File([bytes], "pasted-screenshot.png", { type: "image/png" });
+    const file = new File([bytes], fileName, { type: "image/png" });
     const transfer = new DataTransfer();
     transfer.items.add(file);
     element.dispatchEvent(
@@ -16,7 +20,7 @@ async function pasteScreenshot(page: import("@playwright/test").Page): Promise<v
         clipboardData: transfer,
       }),
     );
-  }, screenshot);
+  }, { base64: screenshot, fileName });
 }
 
 test("fills a legacy request title once without exposing other edit fields", async ({ page }) => {
@@ -101,8 +105,15 @@ test("runs the customer and developer request lifecycle with simple clarificatio
     page.getByLabel("添加备注").getByRole("textbox"),
     publicRemark,
   );
+  await pasteScreenshot(
+    page,
+    page.getByLabel("添加备注").getByRole("textbox"),
+    "remark-proof.png",
+  );
   await page.getByRole("button", { name: "添加备注" }).click();
-  await expect(page.getByText(publicRemark)).toBeVisible();
+  const publicRemarkItem = page.locator(".message-item", { hasText: publicRemark });
+  await expect(publicRemarkItem).toBeVisible();
+  await expect(publicRemarkItem.getByAltText("remark-proof.png")).toBeVisible();
 
   await fillHydrated(page.getByLabel("私人笔记内容"), privateNote);
   await page.getByRole("button", { name: "保存笔记" }).click();
@@ -112,8 +123,19 @@ test("runs the customer and developer request lifecycle with simple clarificatio
     page.getByLabel("澄清消息").getByRole("textbox"),
     firstQuestion,
   );
+  await pasteScreenshot(
+    page,
+    page.getByLabel("澄清消息").getByRole("textbox"),
+    "developer-question.png",
+  );
+  const clarificationResponse = page.waitForResponse((response) =>
+    response.url().includes("/clarifications"),
+  );
   await page.getByRole("button", { name: "提出问题" }).click();
-  await expect(page.getByText(firstQuestion)).toBeVisible();
+  await clarificationResponse;
+  const firstQuestionItem = page.locator(".message-item", { hasText: firstQuestion });
+  await expect(firstQuestionItem).toBeVisible();
+  await expect(firstQuestionItem.getByAltText("developer-question.png")).toBeVisible();
 
   await loginAs(page, "customerB");
   await page.goto("/requests");
@@ -131,8 +153,15 @@ test("runs the customer and developer request lifecycle with simple clarificatio
     page.getByLabel("澄清消息").getByRole("textbox"),
     customerReply,
   );
+  await pasteScreenshot(
+    page,
+    page.getByLabel("澄清消息").getByRole("textbox"),
+    "customer-reply.png",
+  );
   await page.getByRole("button", { name: "提交回复" }).click();
-  await expect(page.getByText(customerReply)).toBeVisible();
+  const customerReplyItem = page.locator(".message-item", { hasText: customerReply });
+  await expect(customerReplyItem).toBeVisible();
+  await expect(customerReplyItem.getByAltText("customer-reply.png")).toBeVisible();
   await page.goto("/requests");
   await expect(page.getByTestId(`request-row-${requestNumber}`)).not.toHaveAttribute(
     "data-attention",
@@ -146,13 +175,30 @@ test("runs the customer and developer request lifecycle with simple clarificatio
     secondQuestion,
   );
   await page.getByRole("button", { name: "提出问题" }).click();
-  await expect(page.getByText(secondQuestion)).toBeVisible();
+  await expect(page.locator(".message-item", { hasText: secondQuestion })).toBeVisible();
   await page.getByRole("button", { name: "暂停" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "确认暂停" }).click();
   await expect(page.getByText("已暂停", { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "恢复", exact: true }).click();
   await expect(page.getByText("正常", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("正在等待客户回复")).toBeVisible();
+
+  await page.getByLabel("更新进度").selectOption("COMPLETED");
+  const completionDialog = page.getByRole("dialog", { name: "将需求设为完成" });
+  await expect(completionDialog).toBeVisible();
+  await completionDialog.getByLabel("完成说明（可选）").fill("已完成修复并通过回归验证。");
+  await pasteScreenshot(
+    page,
+    completionDialog.getByLabel("完成说明（可选）"),
+    "completion-proof.png",
+  );
+  await completionDialog.getByRole("button", { name: "确认完成" }).click();
+  await expect(page.getByLabel("更新进度")).toHaveValue("COMPLETED");
+  await expect(page.getByLabel("完成说明（可选）")).toHaveValue("已完成修复并通过回归验证。");
+  await expect(page.getByAltText("completion-proof.png")).toBeVisible();
+  await page.getByLabel("更新进度").selectOption("SCHEDULED");
+  await expect(page.getByLabel("更新进度")).toHaveValue("SCHEDULED");
+  await expect(page.getByLabel("完成说明（可选）")).toHaveValue("已完成修复并通过回归验证。");
 
   await page.getByRole("button", { name: "归档" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "确认归档" }).click();

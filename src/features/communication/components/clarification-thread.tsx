@@ -5,11 +5,9 @@ import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { UserRole } from "@/db/types";
+import { AttachmentGallery } from "@/features/attachments/attachment-gallery";
+import { ScreenshotInput } from "@/features/attachments/screenshot-input";
 import type { ClarificationMessageDto } from "@/features/communication/queries";
-import {
-  askClarificationRuntimeAction,
-  replyClarificationRuntimeAction,
-} from "@/features/communication/runtime-actions";
 
 function idempotencyKey(): string {
   return typeof globalThis.crypto?.randomUUID === "function"
@@ -42,6 +40,7 @@ export function ClarificationThread({
   messages: readonly ClarificationMessageDto[];
 }) {
   const [content, setContent] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const key = useRef(idempotencyKey());
@@ -55,22 +54,24 @@ export function ClarificationThread({
     setPending(true);
     setError(null);
     try {
-      const input = {
-        requestId,
-        expectedVersion,
-        content,
-        idempotencyKey: key.current,
-      };
-      const result =
-        role === "DEVELOPER"
-          ? await askClarificationRuntimeAction(input)
-          : await replyClarificationRuntimeAction(input);
+      const form = new FormData();
+      form.set("expectedVersion", String(expectedVersion));
+      form.set("content", content);
+      form.set("idempotencyKey", key.current);
+      for (const file of files) form.append("attachments", file);
+      const response = await fetch(`/api/requests/${requestId}/clarifications`, {
+        method: "POST",
+        body: form,
+      });
+      const result = (await response.json()) as { ok: boolean; message?: string };
       if (!result.ok) {
-        setError(result.message);
+        setError(result.message ?? "消息提交失败，请稍后重试");
         return;
       }
       setContent("");
+      setFiles([]);
       key.current = idempotencyKey();
+      window.location.reload();
     } catch {
       setError("消息提交失败，请稍后重试");
     } finally {
@@ -102,13 +103,23 @@ export function ClarificationThread({
                 </time>
               </div>
               <p className="plain-text">{message.content}</p>
+              {message.attachments?.length ? (
+                <div className="message-item__attachments">
+                  <AttachmentGallery attachments={message.attachments} />
+                </div>
+              ) : null}
             </li>
           ))}
         </ol>
       )}
 
       {canCompose ? (
-        <form className="inline-compose" onSubmit={submit} aria-label="澄清消息">
+        <form
+          className="inline-compose"
+          onSubmit={submit}
+          aria-label="澄清消息"
+          data-screenshot-paste-target="true"
+        >
           <label htmlFor="clarification-message">
             {role === "DEVELOPER" ? "向客户提出问题" : "回复开发者的问题"}
           </label>
@@ -119,6 +130,11 @@ export function ClarificationThread({
             value={content}
             disabled={pending}
             onChange={(event) => setContent(event.currentTarget.value)}
+          />
+          <ScreenshotInput
+            value={files}
+            onChange={setFiles}
+            disabled={pending}
           />
           {error ? (
             <p className="field__error" role="alert">

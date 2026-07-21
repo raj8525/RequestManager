@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import type { UserRole } from "@/db/types";
 import { RequestActions } from "@/features/requests/components/request-actions";
 import type { RequestViewDto } from "@/features/requests/presenter";
+import { progressBadgeTone } from "@/features/requests/progress-badge-tone";
 import type {
   RequestSortDirection,
   RequestSortField,
@@ -194,9 +195,7 @@ export function RequestList({
                   </Badge>
                 </td>
                 <td data-label="进度">
-                  <Badge
-                    tone={item.progressStatus === "COMPLETED" ? "success" : "info"}
-                  >
+                  <Badge tone={progressBadgeTone(item.progressStatus)}>
                     {progressLabels[item.progressStatus]}
                   </Badge>
                 </td>

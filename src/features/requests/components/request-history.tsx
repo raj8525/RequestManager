@@ -15,7 +15,6 @@ const eventLabels: Record<RequestHistoryEventDto["eventType"], string> = {
   PUBLIC_REMARK_ADDED: "添加了备注",
   CLARIFICATION_ASKED: "提出了澄清问题",
   CLARIFICATION_REPLIED: "回复了澄清问题",
-  COMPLETION_NOTE_UPDATED: "更新了完成说明",
 };
 
 const statusLabels = {
@@ -55,7 +54,11 @@ export function RequestHistory({
           {events.map((event) => (
             <li className="message-item" key={event.id}>
               <div className="message-item__meta">
-                <strong>{eventLabels[event.eventType]}</strong>
+                <strong>
+                  {event.subject === "COMPLETION_NOTE"
+                    ? "更新了完成说明"
+                    : eventLabels[event.eventType]}
+                </strong>
                 <span>{event.actor?.displayName ?? "系统"}</span>
                 <time dateTime={new Date(event.createdAt).toISOString()}>
                   {displayTime(event.createdAt)}

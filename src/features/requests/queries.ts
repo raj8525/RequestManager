@@ -67,6 +67,7 @@ export type RequestHistoryEventDto = {
   eventType: RequestEventType;
   actor: { id: number; displayName: string } | null;
   change: RequestHistoryChange | null;
+  subject: "COMPLETION_NOTE" | null;
   createdAt: Date;
 };
 
@@ -86,6 +87,15 @@ function validationErrors(error: ZodError): Record<string, string[]> {
     (errors[key] ??= []).push(issue.message);
   }
   return errors;
+}
+
+function safeEventSubject(
+  eventType: RequestEventType,
+  payload: Record<string, unknown> | null,
+): RequestHistoryEventDto["subject"] {
+  return eventType === "REQUEST_UPDATED" && payload?.field === "completionNote"
+    ? "COMPLETION_NOTE"
+    : null;
 }
 
 function invalidInput(error: ZodError): ActionFailure {
@@ -349,6 +359,7 @@ export function listRequestEvents(
           ? null
           : { id: row.actorId, displayName: row.actorDisplayName },
       change: safeEventChange(row.eventType, row.payload),
+      subject: safeEventSubject(row.eventType, row.payload),
       createdAt: row.createdAt,
     })),
   );

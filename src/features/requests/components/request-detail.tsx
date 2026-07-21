@@ -12,9 +12,12 @@ import type {
   PrivateNoteDto,
   PublicRemarkDto,
 } from "@/features/communication/queries";
+import { CompletionNoteEditor } from "@/features/completion-notes/components/completion-note-editor";
+import type { CompletionNoteDto } from "@/features/completion-notes/queries";
 import { RequestActions } from "@/features/requests/components/request-actions";
 import { RequestHistory } from "@/features/requests/components/request-history";
 import type { RequestViewDto } from "@/features/requests/presenter";
+import { progressBadgeTone } from "@/features/requests/progress-badge-tone";
 import type { RequestHistoryEventDto } from "@/features/requests/queries";
 
 const typeLabels = {
@@ -55,6 +58,7 @@ export function RequestDetail({
   remarks,
   clarifications,
   privateNote,
+  completionNote = null,
   events,
 }: {
   actor: { id: number; role: UserRole };
@@ -63,6 +67,7 @@ export function RequestDetail({
   remarks: readonly PublicRemarkDto[];
   clarifications: readonly ClarificationMessageDto[];
   privateNote?: PrivateNoteDto | null;
+  completionNote?: CompletionNoteDto | null;
   events: readonly RequestHistoryEventDto[];
 }) {
   return (
@@ -92,7 +97,7 @@ export function RequestDetail({
             >
               {priorityLabels[request.priority]}
             </Badge>
-            <Badge tone={request.progressStatus === "COMPLETED" ? "success" : "info"}>
+            <Badge tone={progressBadgeTone(request.progressStatus)}>
               {progressLabels[request.progressStatus]}
             </Badge>
             <Badge tone={request.recordStatus === "ACTIVE" ? "neutral" : "warning"}>
@@ -148,6 +153,13 @@ export function RequestDetail({
         recordStatus={request.recordStatus}
         needsCustomerReply={request.needsCustomerReply}
         messages={clarifications}
+      />
+      <CompletionNoteEditor
+        role={actor.role}
+        requestId={request.id}
+        expectedVersion={request.version}
+        recordStatus={request.recordStatus}
+        note={completionNote}
       />
       {actor.role === "DEVELOPER" ? (
         <PrivateNoteEditor

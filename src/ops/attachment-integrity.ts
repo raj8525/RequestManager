@@ -99,7 +99,12 @@ export async function checkAttachmentIntegrity(
   try {
     rows = sqlite
       .prepare(
-        "select storage_name as storageName, size_bytes as sizeBytes, sha256 from attachments union all select storage_name, size_bytes, sha256 from developer_question_attachments order by storageName",
+        `select storage_name as storageName, size_bytes as sizeBytes, sha256 from attachments
+         union all select storage_name, size_bytes, sha256 from developer_question_attachments
+         union all select storage_name, size_bytes, sha256 from public_remark_attachments
+         union all select storage_name, size_bytes, sha256 from clarification_message_attachments
+         union all select storage_name, size_bytes, sha256 from completion_note_attachments
+         order by storageName`,
       )
       .all() as AttachmentRow[];
   } finally {
@@ -146,8 +151,14 @@ export async function checkAttachmentIntegrity(
           const storageName = canonicalStorageName(uploadsPath, path);
           const referenced = storageName
             ? confirm
-                .prepare("select 1 from attachments where storage_name = ? union all select 1 from developer_question_attachments where storage_name = ?")
-                .get(storageName, storageName)
+                .prepare(
+                  `select 1 from attachments where storage_name = ?
+                   union all select 1 from developer_question_attachments where storage_name = ?
+                   union all select 1 from public_remark_attachments where storage_name = ?
+                   union all select 1 from clarification_message_attachments where storage_name = ?
+                   union all select 1 from completion_note_attachments where storage_name = ?`,
+                )
+                .get(storageName, storageName, storageName, storageName, storageName)
             : undefined;
           if (referenced) continue;
           const stats = lstatSync(path);

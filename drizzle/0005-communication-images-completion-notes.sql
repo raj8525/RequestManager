@@ -1,3 +1,7 @@
+ALTER TABLE `public_remarks` ADD `payload_fingerprint` text DEFAULT '' NOT NULL;
+--> statement-breakpoint
+ALTER TABLE `clarification_messages` ADD `payload_fingerprint` text DEFAULT '' NOT NULL;
+--> statement-breakpoint
 CREATE TABLE `public_remark_attachments` (
   `id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
   `public_remark_id` integer NOT NULL,

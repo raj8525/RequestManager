@@ -7,6 +7,7 @@ import { useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { buttonClassName } from "@/components/ui/button";
 import type { UserRole } from "@/db/types";
+import { CompleteRequestDialog } from "@/features/completion-notes/components/complete-request-dialog";
 import type { RequestViewDto } from "@/features/requests/presenter";
 import {
   archiveRequestRuntimeAction,
@@ -30,6 +31,7 @@ export function RequestActions({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<ConfirmedAction>(null);
+  const [completionOpen, setCompletionOpen] = useState(false);
   const canEdit =
     actor.role === "CUSTOMER" &&
     actor.id === request.createdById &&
@@ -119,6 +121,10 @@ export function RequestActions({
                 | "SCHEDULED"
                 | "COMPLETED";
               if (progressStatus === request.progressStatus) return;
+              if (progressStatus === "COMPLETED") {
+                setCompletionOpen(true);
+                return;
+              }
               void run(() =>
                 changeProgressRuntimeAction({
                   ...lifecycleInput,
@@ -198,6 +204,15 @@ export function RequestActions({
         onCancel={() => setConfirming(null)}
         onConfirm={() => void run(() => archiveRequestRuntimeAction(lifecycleInput))}
       />
+      {completionOpen ? (
+        <CompleteRequestDialog
+          open
+          requestId={request.id}
+          expectedVersion={request.version}
+          onCancel={() => setCompletionOpen(false)}
+          onCompleted={() => window.location.reload()}
+        />
+      ) : null}
     </div>
   );
 }

@@ -19,7 +19,14 @@ import { afterEach, describe, expect, it } from "vitest";
 import { hashPassword } from "@/auth/password";
 import { closeDatabase, createDatabase } from "@/db/client";
 import { migrateDatabase } from "@/db/migrate";
-import { attachments, projects, requests, users } from "@/db/schema";
+import {
+  attachments,
+  completionNoteAttachments,
+  completionNotes,
+  projects,
+  requests,
+  users,
+} from "@/db/schema";
 import {
   createBackup,
   restoreBackup,
@@ -120,6 +127,44 @@ describe("consistent backup and stopped restore", () => {
     });
     writeFileSync(attachmentPath, bytes);
 
+    const note = database.db
+      .insert(completionNotes)
+      .values({
+        requestId: request.id,
+        content: "completed",
+        updatedById: developer.id,
+        createdAt: NOW,
+        updatedAt: NOW,
+      })
+      .returning()
+      .get();
+    const completionStorageName = randomUUID();
+    const completionBytes = Buffer.from("completion screenshot bytes");
+    const completionAttachment = database.db
+      .insert(completionNoteAttachments)
+      .values({
+        completionNoteId: note.id,
+        requestId: request.id,
+        uploadedById: developer.id,
+        storageName: completionStorageName,
+        originalName: "completed.png",
+        mimeType: "image/png",
+        sizeBytes: completionBytes.length,
+        sha256: digest(completionBytes),
+        createdAt: NOW,
+      })
+      .returning()
+      .get();
+    const completionAttachmentPath = join(
+      paths.uploadsPath,
+      completionStorageName.slice(0, 2),
+      completionStorageName,
+    );
+    mkdirSync(join(paths.uploadsPath, completionStorageName.slice(0, 2)), {
+      recursive: true,
+    });
+    writeFileSync(completionAttachmentPath, completionBytes);
+
     const orphanName = randomUUID();
     const orphanPath = join(
       paths.uploadsPath,
@@ -131,7 +176,15 @@ describe("consistent backup and stopped restore", () => {
     });
     writeFileSync(orphanPath, "orphan must not enter backup");
     closeDatabase(database);
-    return { request, attachment, attachmentPath, bytes, orphanName };
+    return {
+      request,
+      attachment,
+      attachmentPath,
+      bytes,
+      completionAttachment,
+      completionBytes,
+      orphanName,
+    };
   }
 
   it("uses an online SQLite snapshot and includes only snapshot attachment rows", async () => {
@@ -149,23 +202,30 @@ describe("consistent backup and stopped restore", () => {
     expect(existsSync(`${result.backupPath}.partial`)).toBe(false);
     expect(result.manifest).toMatchObject({
       formatVersion: 2,
-      schemaVersion: 5,
+      schemaVersion: 6,
       migrationJournal: [
         { ordinal: 0, hash: expect.stringMatching(/^[0-9a-f]{64}$/) },
         { ordinal: 1, hash: expect.stringMatching(/^[0-9a-f]{64}$/) },
         { ordinal: 2, hash: expect.stringMatching(/^[0-9a-f]{64}$/) },
         { ordinal: 3, hash: expect.stringMatching(/^[0-9a-f]{64}$/) },
         { ordinal: 4, hash: expect.stringMatching(/^[0-9a-f]{64}$/) },
+        { ordinal: 5, hash: expect.stringMatching(/^[0-9a-f]{64}$/) },
       ],
       database: { path: "database.sqlite" },
-      attachments: [
-        {
+      attachments: expect.arrayContaining([
+        expect.objectContaining({
           storageName: fixture.attachment.storageName,
           sizeBytes: fixture.bytes.length,
           sha256: digest(fixture.bytes),
-        },
-      ],
+        }),
+        expect.objectContaining({
+          storageName: fixture.completionAttachment.storageName,
+          sizeBytes: fixture.completionBytes.length,
+          sha256: digest(fixture.completionBytes),
+        }),
+      ]),
     });
+    expect(result.manifest.attachments).toHaveLength(2);
     const backupFiles = readdirSync(result.backupPath, {
       recursive: true,
       withFileTypes: true,

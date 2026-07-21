@@ -61,7 +61,25 @@ describe("RequestList", () => {
     expect(within(row).getByText("王客户")).toBeVisible();
     expect(within(row).getByText("加急")).toBeVisible();
     expect(within(row).getByText("未排期")).toBeVisible();
+    expect(within(row).getByText("未排期")).toHaveClass("badge--neutral");
     expect(within(row).getByRole("link", { name: "保存按钮没有响应" })).toBeVisible();
+  });
+
+  it("uses gray, blue, and green progress badges", () => {
+    render(
+      <RequestList
+        role="DEVELOPER"
+        items={[
+          requestDto({ id: 1, requestNumber: "REQ-000001", progressStatus: "UNSCHEDULED" }),
+          requestDto({ id: 2, requestNumber: "REQ-000002", progressStatus: "SCHEDULED" }),
+          requestDto({ id: 3, requestNumber: "REQ-000003", progressStatus: "COMPLETED" }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("未排期")).toHaveClass("badge--neutral");
+    expect(screen.getByText("已排期")).toHaveClass("badge--blue");
+    expect(screen.getByText("完成")).toHaveClass("badge--success");
   });
 
   it("shows a fill-title action instead of deriving a title from legacy content", () => {

@@ -18,6 +18,7 @@ describe("RequestHistory", () => {
             eventType: "PROGRESS_CHANGED",
             actor: { id: 3, displayName: "李开发" },
             change: { from: "UNSCHEDULED", to: "SCHEDULED" },
+            subject: null,
             createdAt: new Date("2026-07-10T08:00:00.000Z"),
           },
         ]}

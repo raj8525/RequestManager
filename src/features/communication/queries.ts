@@ -4,9 +4,11 @@ import type { ZodError } from "zod";
 import type { AuthenticatedUser } from "@/auth/session-service";
 import {
   clarificationMessages,
+  clarificationMessageAttachments,
   privateNotes,
   projectMemberships,
   publicRemarks,
+  publicRemarkAttachments,
   requests,
   users,
 } from "@/db/schema";
@@ -31,6 +33,7 @@ export type PublicRemarkDto = {
   author: MessageAuthorDto;
   content: string;
   createdAt: Date;
+  attachments?: CommunicationAttachmentDto[];
 };
 
 export type PrivateNoteDto = {
@@ -48,7 +51,25 @@ export type ClarificationMessageDto = {
   authorRole: "CUSTOMER" | "DEVELOPER";
   content: string;
   createdAt: Date;
+  attachments?: CommunicationAttachmentDto[];
 };
+
+export type CommunicationAttachmentDto = {
+  id: number;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: Date;
+  url: string;
+};
+
+function remarkAttachments(database: AppDatabase, remarkId: number): CommunicationAttachmentDto[] {
+  return database.db.select({ id: publicRemarkAttachments.id, originalName: publicRemarkAttachments.originalName, mimeType: publicRemarkAttachments.mimeType, sizeBytes: publicRemarkAttachments.sizeBytes, createdAt: publicRemarkAttachments.createdAt }).from(publicRemarkAttachments).where(eq(publicRemarkAttachments.publicRemarkId, remarkId)).orderBy(asc(publicRemarkAttachments.id)).all().map((item) => ({ ...item, url: `/api/public-remark-attachments/${item.id}` }));
+}
+
+function clarificationAttachments(database: AppDatabase, messageId: number): CommunicationAttachmentDto[] {
+  return database.db.select({ id: clarificationMessageAttachments.id, originalName: clarificationMessageAttachments.originalName, mimeType: clarificationMessageAttachments.mimeType, sizeBytes: clarificationMessageAttachments.sizeBytes, createdAt: clarificationMessageAttachments.createdAt }).from(clarificationMessageAttachments).where(eq(clarificationMessageAttachments.messageId, messageId)).orderBy(asc(clarificationMessageAttachments.id)).all().map((item) => ({ ...item, url: `/api/clarification-attachments/${item.id}` }));
+}
 
 function validationErrors(error: ZodError): Record<string, string[]> {
   const errors: Record<string, string[]> = {};
@@ -184,6 +205,7 @@ export function listPublicRemarks(
       author: { id: row.authorId, displayName: row.authorDisplayName },
       content: row.content,
       createdAt: row.createdAt,
+      attachments: remarkAttachments(database, row.id),
     })),
   );
 }
@@ -256,6 +278,7 @@ export function listClarificationMessages(
       authorRole: row.authorRole,
       content: row.content,
       createdAt: row.createdAt,
+      attachments: clarificationAttachments(database, row.id),
     })),
   );
 }
