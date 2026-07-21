@@ -15,6 +15,7 @@ const eventLabels: Record<RequestHistoryEventDto["eventType"], string> = {
   PUBLIC_REMARK_ADDED: "添加了备注",
   CLARIFICATION_ASKED: "提出了澄清问题",
   CLARIFICATION_REPLIED: "回复了澄清问题",
+  COMPLETION_NOTE_UPDATED: "更新了完成说明",
 };
 
 const statusLabels = {

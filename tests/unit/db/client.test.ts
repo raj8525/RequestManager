@@ -15,9 +15,13 @@ import { afterEach, describe, expect, it } from "vitest";
 import { closeDatabase, createDatabase } from "@/db/client";
 import { migrateDatabase } from "@/db/migrate";
 import {
+  clarificationMessageAttachments,
   clarificationMessages,
+  completionNoteAttachments,
+  completionNotes,
   privateNotes,
   projects,
+  publicRemarkAttachments,
   publicRemarks,
   requests,
   users,
@@ -27,7 +31,10 @@ import { createTestDatabase } from "@/../tests/helpers/test-database";
 const expectedTables = [
   "attachments",
   "auth_throttle",
+  "clarification_message_attachments",
   "clarification_messages",
+  "completion_note_attachments",
+  "completion_notes",
   "developer_question_attachments",
   "developer_question_events",
   "developer_question_messages",
@@ -35,6 +42,7 @@ const expectedTables = [
   "private_notes",
   "project_memberships",
   "projects",
+  "public_remark_attachments",
   "public_remarks",
   "request_events",
   "requests",
@@ -47,6 +55,14 @@ const expectedForeignKeys = [
   "attachments.uploaded_by_id->users.id",
   "clarification_messages.author_id->users.id",
   "clarification_messages.request_id->requests.id",
+  "clarification_message_attachments.message_id->clarification_messages.id",
+  "clarification_message_attachments.request_id->requests.id",
+  "clarification_message_attachments.uploaded_by_id->users.id",
+  "completion_note_attachments.completion_note_id->completion_notes.id",
+  "completion_note_attachments.request_id->requests.id",
+  "completion_note_attachments.uploaded_by_id->users.id",
+  "completion_notes.request_id->requests.id",
+  "completion_notes.updated_by_id->users.id",
   "developer_question_attachments.message_id->developer_question_messages.id",
   "developer_question_attachments.question_id->developer_questions.id",
   "developer_question_attachments.uploaded_by_id->users.id",
@@ -62,6 +78,9 @@ const expectedForeignKeys = [
   "project_memberships.project_id->projects.id",
   "public_remarks.author_id->users.id",
   "public_remarks.request_id->requests.id",
+  "public_remark_attachments.public_remark_id->public_remarks.id",
+  "public_remark_attachments.request_id->requests.id",
+  "public_remark_attachments.uploaded_by_id->users.id",
   "request_events.actor_id->users.id",
   "request_events.request_id->requests.id",
   "requests.created_by_id->users.id",
@@ -333,5 +352,50 @@ describe("createDatabase", () => {
     };
     testDb.db.insert(privateNotes).values(privateNoteInput).run();
     expect(() => testDb.db.insert(privateNotes).values(privateNoteInput).run()).toThrow();
+
+    const remark = testDb.db.select().from(publicRemarks).get()!;
+    const clarification = testDb.db.select().from(clarificationMessages).get()!;
+    const completionNote = testDb.db
+      .insert(completionNotes)
+      .values({ requestId, updatedById: developerId, content: "Completed" })
+      .returning()
+      .get();
+    expect(() =>
+      testDb.db
+        .insert(completionNotes)
+        .values({ requestId, updatedById: developerId, content: "Duplicate" })
+        .run(),
+    ).toThrow();
+
+    testDb.db.insert(publicRemarkAttachments).values({
+      publicRemarkId: remark.id,
+      requestId,
+      uploadedById: developerId,
+      storageName: "aa/remark.png",
+      originalName: "remark.png",
+      mimeType: "image/png",
+      sizeBytes: 1,
+      sha256: "a".repeat(64),
+    }).run();
+    testDb.db.insert(clarificationMessageAttachments).values({
+      messageId: clarification.id,
+      requestId,
+      uploadedById: developerId,
+      storageName: "bb/clarification.png",
+      originalName: "clarification.png",
+      mimeType: "image/png",
+      sizeBytes: 1,
+      sha256: "b".repeat(64),
+    }).run();
+    testDb.db.insert(completionNoteAttachments).values({
+      completionNoteId: completionNote.id,
+      requestId,
+      uploadedById: developerId,
+      storageName: "cc/completion.png",
+      originalName: "completion.png",
+      mimeType: "image/png",
+      sizeBytes: 1,
+      sha256: "c".repeat(64),
+    }).run();
   });
 });

@@ -31,6 +31,7 @@ export const requestEventTypes = [
   "PUBLIC_REMARK_ADDED",
   "CLARIFICATION_ASKED",
   "CLARIFICATION_REPLIED",
+  "COMPLETION_NOTE_UPDATED",
 ] as const;
 export const requestEventVisibilities = ["PUBLIC", "DEVELOPER"] as const;
 export const developerQuestionAttentionStatuses = [
@@ -352,6 +353,28 @@ export const publicRemarks = sqliteTable(
   ],
 );
 
+export const publicRemarkAttachments = sqliteTable(
+  "public_remark_attachments",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    publicRemarkId: integer("public_remark_id").notNull().references(() => publicRemarks.id, { onDelete: "cascade" }),
+    requestId: integer("request_id").notNull().references(() => requests.id, { onDelete: "cascade" }),
+    uploadedById: integer("uploaded_by_id").notNull().references(() => users.id),
+    storageName: text("storage_name").notNull(),
+    originalName: text("original_name").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    sha256: text("sha256").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowInMilliseconds),
+  },
+  (table) => [
+    uniqueIndex("public_remark_attachments_storage_name_unique").on(table.storageName),
+    index("public_remark_attachments_remark_id_idx").on(table.publicRemarkId),
+    index("public_remark_attachments_request_id_idx").on(table.requestId),
+    check("public_remark_attachments_size_check", sql`${table.sizeBytes} >= 0`),
+  ],
+);
+
 export const privateNotes = sqliteTable(
   "private_notes",
   {
@@ -413,6 +436,63 @@ export const clarificationMessages = sqliteTable(
   ],
 );
 
+export const clarificationMessageAttachments = sqliteTable(
+  "clarification_message_attachments",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    messageId: integer("message_id").notNull().references(() => clarificationMessages.id, { onDelete: "cascade" }),
+    requestId: integer("request_id").notNull().references(() => requests.id, { onDelete: "cascade" }),
+    uploadedById: integer("uploaded_by_id").notNull().references(() => users.id),
+    storageName: text("storage_name").notNull(),
+    originalName: text("original_name").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    sha256: text("sha256").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowInMilliseconds),
+  },
+  (table) => [
+    uniqueIndex("clarification_message_attachments_storage_name_unique").on(table.storageName),
+    index("clarification_message_attachments_message_id_idx").on(table.messageId),
+    index("clarification_message_attachments_request_id_idx").on(table.requestId),
+    check("clarification_message_attachments_size_check", sql`${table.sizeBytes} >= 0`),
+  ],
+);
+
+export const completionNotes = sqliteTable(
+  "completion_notes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    requestId: integer("request_id").notNull().references(() => requests.id, { onDelete: "cascade" }),
+    content: text("content").notNull().default(""),
+    updatedById: integer("updated_by_id").notNull().references(() => users.id),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowInMilliseconds),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(nowInMilliseconds),
+  },
+  (table) => [uniqueIndex("completion_notes_request_id_unique").on(table.requestId)],
+);
+
+export const completionNoteAttachments = sqliteTable(
+  "completion_note_attachments",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    completionNoteId: integer("completion_note_id").notNull().references(() => completionNotes.id, { onDelete: "cascade" }),
+    requestId: integer("request_id").notNull().references(() => requests.id, { onDelete: "cascade" }),
+    uploadedById: integer("uploaded_by_id").notNull().references(() => users.id),
+    storageName: text("storage_name").notNull(),
+    originalName: text("original_name").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    sha256: text("sha256").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowInMilliseconds),
+  },
+  (table) => [
+    uniqueIndex("completion_note_attachments_storage_name_unique").on(table.storageName),
+    index("completion_note_attachments_note_id_idx").on(table.completionNoteId),
+    index("completion_note_attachments_request_id_idx").on(table.requestId),
+    check("completion_note_attachments_size_check", sql`${table.sizeBytes} >= 0`),
+  ],
+);
+
 export const requestEvents = sqliteTable(
   "request_events",
   {
@@ -434,7 +514,7 @@ export const requestEvents = sqliteTable(
     index("request_events_request_id_idx").on(table.requestId, table.createdAt, table.id),
     check(
       "request_events_type_check",
-      sql`${table.eventType} in ('REQUEST_CREATED', 'REQUEST_UPDATED', 'PROGRESS_CHANGED', 'REQUEST_PAUSED', 'REQUEST_RESUMED', 'REQUEST_ARCHIVED', 'REQUEST_RESTORED', 'ATTACHMENT_ADDED', 'ATTACHMENT_REMOVED', 'PUBLIC_REMARK_ADDED', 'CLARIFICATION_ASKED', 'CLARIFICATION_REPLIED')`,
+      sql`${table.eventType} in ('REQUEST_CREATED', 'REQUEST_UPDATED', 'PROGRESS_CHANGED', 'REQUEST_PAUSED', 'REQUEST_RESUMED', 'REQUEST_ARCHIVED', 'REQUEST_RESTORED', 'ATTACHMENT_ADDED', 'ATTACHMENT_REMOVED', 'PUBLIC_REMARK_ADDED', 'CLARIFICATION_ASKED', 'CLARIFICATION_REPLIED', 'COMPLETION_NOTE_UPDATED')`,
     ),
     check(
       "request_events_visibility_check",

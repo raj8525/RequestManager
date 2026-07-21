@@ -36,6 +36,13 @@
       "when": 1784010000000,
       "tag": "0004_request-title",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1784682000000,
+      "tag": "0005-communication-images-completion-notes",
+      "breakpoints": true
     }
   ]
 }
