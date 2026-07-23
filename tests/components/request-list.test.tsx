@@ -130,17 +130,14 @@ describe("RequestList", () => {
     expect(screen.getByRole("button", { name: "归档" })).toBeVisible();
   });
 
-  it("offers reopening only to the owner of an active completed request", () => {
+  it("keeps reopening out of compact list actions", () => {
     const completed = requestDto({
       progressStatus: "COMPLETED",
       needsCustomerReply: false,
     });
-    const { rerender } = render(
+    render(
       <RequestList role="CUSTOMER" actorId={3} items={[completed]} />,
     );
-    expect(screen.getByRole("button", { name: "重新打开" })).toBeVisible();
-
-    rerender(<RequestList role="CUSTOMER" actorId={99} items={[completed]} />);
     expect(
       screen.queryByRole("button", { name: "重新打开" }),
     ).not.toBeInTheDocument();

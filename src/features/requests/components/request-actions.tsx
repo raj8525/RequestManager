@@ -54,6 +54,7 @@ export function RequestActions({
     request.progressStatus === "SCHEDULED" &&
     request.project.isActive;
   const canReopen =
+    !compact &&
     actor.role === "CUSTOMER" &&
     actor.id === request.createdById &&
     request.recordStatus === "ACTIVE" &&
