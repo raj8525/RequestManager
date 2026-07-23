@@ -33,6 +33,10 @@ export const requestEventTypes = [
   "CLARIFICATION_REPLIED",
 ] as const;
 export const requestEventVisibilities = ["PUBLIC", "DEVELOPER"] as const;
+export const clarificationMessageKinds = [
+  "CONVERSATION",
+  "REOPEN_REASON",
+] as const;
 export const developerQuestionAttentionStatuses = [
   "WAITING_CUSTOMER",
   "WAITING_DEVELOPER",
@@ -59,6 +63,7 @@ export const users = sqliteTable(
     mustChangePassword: integer("must_change_password", { mode: "boolean" })
       .notNull()
       .default(true),
+    lastLoginAt: integer("last_login_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
       .default(nowInMilliseconds),
@@ -413,6 +418,9 @@ export const clarificationMessages = sqliteTable(
       .notNull()
       .references(() => users.id),
     authorRole: text("author_role", { enum: userRoles }).notNull(),
+    messageKind: text("message_kind", { enum: clarificationMessageKinds })
+      .notNull()
+      .default("CONVERSATION"),
     content: text("content").notNull(),
     idempotencyKey: text("idempotency_key").notNull(),
     payloadFingerprint: text("payload_fingerprint").notNull().default(""),
@@ -433,6 +441,10 @@ export const clarificationMessages = sqliteTable(
     check(
       "clarification_messages_author_role_check",
       sql`${table.authorRole} in ('CUSTOMER', 'DEVELOPER')`,
+    ),
+    check(
+      "clarification_messages_kind_check",
+      sql`${table.messageKind} in ('CONVERSATION', 'REOPEN_REASON')`,
     ),
   ],
 );

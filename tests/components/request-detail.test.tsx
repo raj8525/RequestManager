@@ -1,13 +1,16 @@
 /** @vitest-environment jsdom */
 
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RequestDetail } from "@/features/requests/components/request-detail";
 import type { RequestViewDto } from "@/features/requests/presenter";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 
 const request: RequestViewDto = {
@@ -62,6 +65,7 @@ describe("RequestDetail", () => {
             requestId: 7,
             author: { id: 8, displayName: "李开发" },
             authorRole: "DEVELOPER",
+            messageKind: "CONVERSATION",
             content: "请确认复现步骤",
             createdAt: new Date("2026-07-10T08:20:00.000Z"),
           },
@@ -85,6 +89,64 @@ describe("RequestDetail", () => {
     expect(
       screen.getByRole("heading", { name: "完成说明" }).closest("section"),
     ).toHaveClass("detail-section--completion");
+  });
+
+  it("lets the owner reopen a completed request only after entering a reason", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(JSON.stringify({ ok: false, message: "测试返回" }), {
+          status: 409,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    render(
+      <RequestDetail
+        actor={{ id: 3, role: "CUSTOMER" }}
+        request={{
+          ...request,
+          progressStatus: "COMPLETED",
+          needsCustomerReply: false,
+        }}
+        attachments={[]}
+        remarks={[]}
+        clarifications={[
+          {
+            id: 41,
+            requestId: 7,
+            author: { id: 3, displayName: "王客户" },
+            authorRole: "CUSTOMER",
+            messageKind: "REOPEN_REASON",
+            content: "上一次重新打开的原因",
+            createdAt: new Date("2026-07-10T08:20:00.000Z"),
+          },
+        ]}
+        events={[]}
+      />,
+    );
+
+    expect(screen.getByText("客户重新打开")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "重新打开" }));
+    expect(
+      screen.getByRole("dialog", { name: "重新打开这条需求" }),
+    ).toBeVisible();
+    expect(screen.getByText("粘贴、拖放或选择截图")).toBeVisible();
+    const confirm = screen.getByRole("button", { name: "确认重新打开" });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("重新打开原因"), {
+      target: { value: "验收后仍然可以复现" },
+    });
+    expect(confirm).toBeEnabled();
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url, options] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("/api/requests/7/reopen");
+    expect(options).toMatchObject({ method: "POST" });
+    const body = options?.body as FormData;
+    expect(body.get("expectedVersion")).toBe("4");
+    expect(body.get("reason")).toBe("验收后仍然可以复现");
+    expect(String(body.get("idempotencyKey"))).not.toBe("");
   });
 
   it("assembles only customer-visible communication sections", () => {

@@ -11,11 +11,13 @@ import { and, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createGetHandler } from "@/app/api/attachments/[attachmentId]/route";
+import { createReopenPostHandler } from "@/app/api/requests/[requestId]/reopen/route";
 import { createPutHandler } from "@/app/api/requests/[requestId]/route";
 import { createPostHandler } from "@/app/api/requests/route";
 import type { AuthenticatedUser } from "@/auth/session-service";
 import {
   attachments,
+  clarificationMessages,
   projectMemberships,
   projects,
   requests,
@@ -261,6 +263,60 @@ describe("multipart request and protected attachment routes", () => {
       progressStatus: "COMPLETED",
       recordStatus: "ARCHIVED",
       version: 2,
+    });
+  });
+
+  it("accepts a same-origin customer reopen multipart request", async () => {
+    const db = database();
+    const paths = storage();
+    const owner = insertActor(db, "reopen-owner", "CUSTOMER");
+    const project = insertProject(db, "REOPEN");
+    assign(db, owner.id, project.id);
+    const completed = db.db
+      .insert(requests)
+      .values({
+        projectId: project.id,
+        createdById: owner.id,
+        title: "Completed route request",
+        content: "This completed request needs another review",
+        requestType: "BUG",
+        priority: "NORMAL",
+        progressStatus: "COMPLETED",
+        recordStatus: "ACTIVE",
+        idempotencyKey: "route-completed",
+        createPayloadFingerprint: "fixture",
+      })
+      .returning()
+      .get();
+    const form = new FormData();
+    form.set("expectedVersion", "1");
+    form.set("reason", "客户验收后仍然可以复现");
+    form.set("idempotencyKey", "route-reopen");
+    form.append("attachments", pngFile("reopen-route.png"));
+    const handler = createReopenPostHandler({
+      database: db,
+      storagePaths: paths,
+      appOrigin: APP_ORIGIN,
+      resolveActor: async () => owner,
+    });
+
+    const response = await handler(
+      multipartRequest(
+        `/api/requests/${completed.id}/reopen`,
+        "POST",
+        form,
+      ),
+      { params: Promise.resolve({ requestId: String(completed.id) }) },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      data: { id: completed.id, progressStatus: "UNSCHEDULED", version: 2 },
+    });
+    expect(db.db.select().from(clarificationMessages).get()).toMatchObject({
+      messageKind: "REOPEN_REASON",
+      content: "客户验收后仍然可以复现",
     });
   });
 

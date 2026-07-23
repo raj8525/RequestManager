@@ -444,6 +444,9 @@ describe("database-backed sessions", () => {
     );
 
     expect(result).toMatchObject({ ok: true });
+    expect(
+      db.db.select().from(users).where(eq(users.id, user.id)).get()?.lastLoginAt,
+    ).toEqual(NOW);
     expect(cookies.writes[0]).toMatchObject({
       name: "request_manager_session",
       options: {
@@ -478,6 +481,48 @@ describe("database-backed sessions", () => {
       value: "",
       options: { expires: new Date(0) },
     });
+  });
+
+  it("updates only successful customer logins and keeps developer and failed attempts empty", async () => {
+    const db = database();
+    const customer = await insertUser(db, { username: "customer" });
+    const developer = await insertUser(db, {
+      username: "developer",
+      role: "DEVELOPER",
+    });
+    const later = new Date(NOW.getTime() + 60_000);
+
+    await loginAction(
+      db,
+      { username: "customer", password: "wrong" },
+      actionContext(),
+    );
+    expect(
+      db.db.select().from(users).where(eq(users.id, customer.id)).get()?.lastLoginAt,
+    ).toBeNull();
+
+    await loginAction(
+      db,
+      { username: "customer", password: "initial password" },
+      actionContext(),
+    );
+    await loginAction(
+      db,
+      { username: "customer", password: "initial password" },
+      actionContext(new TestCookies(), { now: later, source: "later-source" }),
+    );
+    await loginAction(
+      db,
+      { username: "developer", password: "initial password" },
+      actionContext(new TestCookies(), { source: "developer-source" }),
+    );
+
+    expect(
+      db.db.select().from(users).where(eq(users.id, customer.id)).get()?.lastLoginAt,
+    ).toEqual(later);
+    expect(
+      db.db.select().from(users).where(eq(users.id, developer.id)).get()?.lastLoginAt,
+    ).toBeNull();
   });
 
   it("changes the password, revokes all sessions and redirects to login", async () => {

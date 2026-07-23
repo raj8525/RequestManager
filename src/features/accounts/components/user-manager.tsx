@@ -38,6 +38,17 @@ function editorTitle(editor: Exclude<Editor, null>): string {
   return `重置密码 · ${editor.user.displayName}`;
 }
 
+function displayLastLogin(value: Date): string {
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(value));
+}
+
 export function UserManager({
   actorId,
   users,
@@ -108,6 +119,7 @@ export function UserManager({
                 <th scope="col">类型</th>
                 <th scope="col">状态</th>
                 <th scope="col">密码</th>
+                <th scope="col">最后登录</th>
                 <th scope="col">项目权限</th>
                 <th scope="col">操作</th>
               </tr>
@@ -137,6 +149,17 @@ export function UserManager({
                       <Badge tone={user.mustChangePassword ? "warning" : "neutral"}>
                         {user.mustChangePassword ? "需修改密码" : "密码已更新"}
                       </Badge>
+                    </td>
+                    <td data-label="最后登录">
+                      {user.role === "DEVELOPER"
+                        ? "—"
+                        : user.lastLoginAt
+                          ? (
+                              <time dateTime={new Date(user.lastLoginAt).toISOString()}>
+                                {displayLastLogin(user.lastLoginAt)}
+                              </time>
+                            )
+                          : "从未登录"}
                     </td>
                     <td data-label="项目权限" className="management-table__memberships">
                       {user.role === "DEVELOPER" ? (

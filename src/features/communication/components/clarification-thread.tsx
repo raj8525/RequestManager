@@ -106,7 +106,13 @@ export function ClarificationThread({
             >
               <div className="message-item__meta">
                 <strong>{message.author.displayName}</strong>
-                <span>{message.authorRole === "DEVELOPER" ? "开发者提问" : "客户回复"}</span>
+                <span>
+                  {message.messageKind === "REOPEN_REASON"
+                    ? "客户重新打开"
+                    : message.authorRole === "DEVELOPER"
+                      ? "开发者提问"
+                      : "客户回复"}
+                </span>
                 <time dateTime={new Date(message.createdAt).toISOString()}>
                   {displayTime(message.createdAt)}
                 </time>

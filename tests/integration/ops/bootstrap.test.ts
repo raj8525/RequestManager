@@ -81,8 +81,24 @@ describe("explicit migration and first-developer bootstrap", () => {
     expect(log).toMatchObject({
       event: "database_migrated",
       beforeVersion: 0,
-      afterVersion: 6,
+      afterVersion: 7,
     });
+
+    const sqlite = new Database(paths.databasePath, { readonly: true });
+    try {
+      const userColumns = sqlite
+        .prepare("pragma table_info('users')")
+        .all() as Array<{ name: string }>;
+      const clarificationColumns = sqlite
+        .prepare("pragma table_info('clarification_messages')")
+        .all() as Array<{ name: string; dflt_value: string | null }>;
+      expect(userColumns.some((column) => column.name === "last_login_at")).toBe(true);
+      expect(
+        clarificationColumns.find((column) => column.name === "message_kind"),
+      ).toMatchObject({ dflt_value: "'CONVERSATION'" });
+    } finally {
+      sqlite.close();
+    }
   });
 
   it("creates only the first enabled developer and never prints or overwrites its password", async () => {

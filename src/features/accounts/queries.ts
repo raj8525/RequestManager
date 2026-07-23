@@ -8,12 +8,13 @@ import { actionFailure, actionSuccess, type ActionResult } from "@/lib/action-re
 
 import type { ManagedUser } from "./service";
 
-export type ManageableUserDto = ManagedUser & { projectIds: number[] };
+export type ManageableUser = ManagedUser & { lastLoginAt: Date | null };
+export type ManageableUserDto = ManageableUser & { projectIds: number[] };
 
 export function listManageableUsers(
   database: AppDatabase,
   actor: AuthenticatedUser,
-): ActionResult<ManagedUser[]> {
+): ActionResult<ManageableUser[]> {
   try {
     requireDeveloper(actor);
   } catch (error) {
@@ -33,6 +34,7 @@ export function listManageableUsers(
         role: users.role,
         isActive: users.isActive,
         mustChangePassword: users.mustChangePassword,
+        lastLoginAt: users.lastLoginAt,
         createdAt: users.createdAt,
         updatedAt: users.updatedAt,
       })

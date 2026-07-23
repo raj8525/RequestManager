@@ -126,6 +126,6 @@ export async function appendClarificationWithAttachments(database: AppDatabase, 
       return { message, actor: currentActor, attachments };
     }).immediate();
     discardStagedAttachments(staged, paths);
-    return actionSuccess({ id: result.message.id, requestId: result.message.requestId, author: { id: result.actor.id, displayName: result.actor.displayName }, authorRole: result.message.authorRole, content: result.message.content, createdAt: result.message.createdAt, attachments: result.attachments.map((item) => attachmentDto("clarification", item)) });
+    return actionSuccess({ id: result.message.id, requestId: result.message.requestId, author: { id: result.actor.id, displayName: result.actor.displayName }, authorRole: result.message.authorRole, messageKind: result.message.messageKind, content: result.message.content, createdAt: result.message.createdAt, attachments: result.attachments.map((item) => attachmentDto("clarification", item)) });
   } catch (error) { cleanup(staged, committed, paths); return failure(error); }
 }

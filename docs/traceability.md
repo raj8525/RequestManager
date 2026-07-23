@@ -5,6 +5,7 @@
 | `AUTH-01` | 两种角色、用户名密码登录、七天会话 | `src/auth`、`src/app/(auth)` | `tests/integration/auth`、`e2e/auth.spec.ts` |
 | `AUTH-02` | 客户只能改本人密码，用户名由开发者管理 | `src/auth/actions.ts`、`src/features/accounts` | `tests/integration/auth`、`tests/integration/accounts` |
 | `AUTH-03` | 强制改密、停用/重置/改密撤销会话 | `src/app/(password)`、`src/auth/session-service.ts` | `tests/integration/auth`、`e2e/auth.spec.ts` |
+| `AUTH-04` | 记录客户最后成功登录时间且仅开发者账号管理可见 | `src/auth/actions.ts`、`src/features/accounts`、`drizzle/0006-customer-reopen-last-login.sql` | `tests/integration/auth/session.test.ts`、`tests/integration/accounts/accounts.test.ts`、`e2e/auth.spec.ts` |
 | `PROJ-01` | 开发者管理项目和客户项目分配 | `src/features/projects`、`src/features/accounts` | `tests/integration/projects`、`tests/integration/accounts` |
 | `PROJ-02` | 项目停用保留历史并阻止客户写入 | `src/features/projects/authorization.ts`、领域服务 | `tests/integration/projects`、`tests/integration/requests` |
 | `REQ-01` | 客户提交必填标题、正文、类型、优先级 | `src/features/requests`、`src/app/api/requests` | `tests/integration/requests`、`e2e/request-lifecycle.spec.ts` |
@@ -13,6 +14,7 @@
 | `REQ-04` | 历史无标题需求由原提交客户一次性补充标题，其他字段保持不变 | `drizzle/0004_request-title.sql`、`src/features/requests/service.ts`、`request-form.tsx` | `tests/unit/db/client.test.ts`、`tests/integration/requests/request-service.test.ts`、`e2e/request-lifecycle.spec.ts` |
 | `STATE-01` | 进度仅未排期、已排期、完成 | `src/db/schema.ts`、`src/features/requests/service.ts` | `tests/integration/requests`、`e2e/request-lifecycle.spec.ts` |
 | `STATE-02` | 记录状态正常、已暂停、已归档及恢复规则 | `src/features/requests/policy.ts`、`service.ts` | `tests/unit/requests/policy.test.ts`、`e2e/request-lifecycle.spec.ts` |
+| `STATE-03` | 客户以必填原因和可选截图将本人已完成需求重新打开为未排期 | `src/features/requests/reopen-service.ts`、`src/app/api/requests/[requestId]/reopen`、`reopen-request-dialog.tsx` | `tests/integration/requests/request-reopen.test.ts`、`tests/components/request-detail.test.tsx`、`e2e/request-lifecycle.spec.ts` |
 | `COMM-01` | 客户可见公开备注 | `src/features/communication/components/public-remarks.tsx`、`service.ts` | `tests/integration/communication`、`e2e/request-lifecycle.spec.ts` |
 | `COMM-02` | 每位开发者一份仅本人可见私人笔记 | `src/features/communication/queries.ts`、`private-note-editor.tsx` | `tests/integration/communication`、`e2e/private-notes.spec.ts` |
 | `COMM-03` | 提问标红置顶、回复清除、再次提问重现 | `src/features/communication`、客户排序查询 | `tests/integration/communication`、`e2e/request-lifecycle.spec.ts` |
@@ -30,4 +32,4 @@
 | `UX-02` | 搜索、筛选、可点击表头、业务顺序、稳定分页 | `request-toolbar.tsx`、`request-list.tsx`、`queries.ts`、`pagination.tsx` | `tests/unit/requests/sorting.test.ts`、`tests/components/request-list.test.tsx`、`e2e/request-lifecycle.spec.ts` |
 | `SEC-01` | 服务端权限、同源、IDOR 防护 | `src/auth`、各领域服务和 API | `tests/unit/lib/csrf.test.ts`、`e2e/access-control.spec.ts` |
 
-基础批准规格：`docs/superpowers/specs/2026-07-10-request-manager-design.md`。需求标题增量规格：`docs/superpowers/specs/2026-07-14-request-titles-design.md`。实施步骤和门禁见对应的 `docs/superpowers/plans/` 文档。
+基础批准规格：`docs/superpowers/specs/2026-07-10-request-manager-design.md`。需求标题增量规格：`docs/superpowers/specs/2026-07-14-request-titles-design.md`。客户重新打开与最后登录规格：`docs/superpowers/specs/2026-07-22-customer-reopen-completed-request-design.md`、`docs/superpowers/specs/2026-07-23-customer-last-login-design.md`。实施步骤和门禁见对应的 `docs/superpowers/plans/` 文档。

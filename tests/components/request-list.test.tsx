@@ -130,6 +130,22 @@ describe("RequestList", () => {
     expect(screen.getByRole("button", { name: "归档" })).toBeVisible();
   });
 
+  it("offers reopening only to the owner of an active completed request", () => {
+    const completed = requestDto({
+      progressStatus: "COMPLETED",
+      needsCustomerReply: false,
+    });
+    const { rerender } = render(
+      <RequestList role="CUSTOMER" actorId={3} items={[completed]} />,
+    );
+    expect(screen.getByRole("button", { name: "重新打开" })).toBeVisible();
+
+    rerender(<RequestList role="CUSTOMER" actorId={99} items={[completed]} />);
+    expect(
+      screen.queryByRole("button", { name: "重新打开" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders sorting links and keeps customer actions in the final cell", () => {
     render(
       <RequestList

@@ -96,6 +96,19 @@ export const requestLifecycleSchema = z
   })
   .strict();
 
+export const reopenRequestSchema = z
+  .object({
+    requestId: requestIdSchema,
+    expectedVersion: expectedVersionSchema,
+    reason: z
+      .string()
+      .trim()
+      .min(1, "重新打开原因不能为空")
+      .max(10_000, "重新打开原因不能超过 10000 个字符"),
+    idempotencyKey: idempotencyKeySchema,
+  })
+  .strict();
+
 export const requestDetailSchema = z
   .object({ requestId: requestIdSchema })
   .strict();
@@ -126,6 +139,7 @@ export type UpdateOwnRequestInput = z.input<typeof updateOwnRequestSchema>;
 export type FillLegacyRequestTitleInput = z.input<typeof fillLegacyRequestTitleSchema>;
 export type ChangeProgressInput = z.input<typeof changeProgressSchema>;
 export type RequestLifecycleInput = z.input<typeof requestLifecycleSchema>;
+export type ReopenRequestInput = z.input<typeof reopenRequestSchema>;
 export type ListRequestsInput = z.input<typeof listRequestsSchema>;
 export type RequestSortField = (typeof requestSortFields)[number];
 export type RequestSortDirection = (typeof requestSortDirections)[number];

@@ -196,6 +196,34 @@ test("runs the customer and developer request lifecycle with simple clarificatio
   await expect(page.getByLabel("更新进度")).toHaveValue("COMPLETED");
   await expect(page.getByLabel("完成说明（可选）")).toHaveValue("已完成修复并通过回归验证。");
   await expect(page.getByAltText("completion-proof.png")).toBeVisible();
+
+  await loginAs(page, "customerA");
+  await page.goto(`/requests/${requestNumber}`);
+  await page.getByRole("button", { name: "重新打开" }).click();
+  const reopenDialog = page.getByRole("dialog", { name: "重新打开这条需求" });
+  await expect(reopenDialog.getByRole("button", { name: "确认重新打开" })).toBeDisabled();
+  await fillHydrated(
+    reopenDialog.getByLabel("重新打开原因"),
+    "验收后发现原问题仍然可以复现。",
+  );
+  await pasteScreenshot(
+    page,
+    reopenDialog.getByLabel("重新打开原因"),
+    "reopen-proof.png",
+  );
+  await reopenDialog.getByRole("button", { name: "确认重新打开" }).click();
+  await expect(page.getByText("未排期", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "编辑" })).toBeVisible();
+  const reopenMessage = page.locator(".message-item", {
+    hasText: "验收后发现原问题仍然可以复现。",
+  });
+  await expect(reopenMessage).toContainText("客户重新打开");
+  await expect(reopenMessage.getByAltText("reopen-proof.png")).toBeVisible();
+  await expect(page.getByText("已完成修复并通过回归验证。")).toBeVisible();
+  await expect(page.getByAltText("completion-proof.png")).toBeVisible();
+
+  await loginAs(page, "developerA");
+  await page.goto(`/requests/${requestNumber}`);
   await page.getByLabel("更新进度").selectOption("SCHEDULED");
   await expect(page.getByLabel("更新进度")).toHaveValue("SCHEDULED");
   await expect(page.getByLabel("完成说明（可选）")).toHaveValue("已完成修复并通过回归验证。");

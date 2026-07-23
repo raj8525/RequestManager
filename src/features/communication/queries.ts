@@ -49,6 +49,7 @@ export type ClarificationMessageDto = {
   requestId: number;
   author: MessageAuthorDto;
   authorRole: "CUSTOMER" | "DEVELOPER";
+  messageKind: "CONVERSATION" | "REOPEN_REASON";
   content: string;
   createdAt: Date;
   attachments?: CommunicationAttachmentDto[];
@@ -261,6 +262,7 @@ export function listClarificationMessages(
       authorId: clarificationMessages.authorId,
       authorDisplayName: users.displayName,
       authorRole: clarificationMessages.authorRole,
+      messageKind: clarificationMessages.messageKind,
       content: clarificationMessages.content,
       createdAt: clarificationMessages.createdAt,
     })
@@ -276,6 +278,7 @@ export function listClarificationMessages(
       requestId: row.requestId,
       author: { id: row.authorId, displayName: row.authorDisplayName },
       authorRole: row.authorRole,
+      messageKind: row.messageKind,
       content: row.content,
       createdAt: row.createdAt,
       attachments: clarificationAttachments(database, row.id),

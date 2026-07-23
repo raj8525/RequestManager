@@ -85,6 +85,7 @@ describe("developer administration workbench", () => {
       mustChangePassword: true,
       createdAt: now,
       updatedAt: now,
+      lastLoginAt: new Date("2026-07-22T03:04:00.000Z"),
       projectIds: [11],
       passwordHash: "must-not-render",
       privateNote: "A only secret note",
@@ -105,7 +106,45 @@ describe("developer administration workbench", () => {
     expect(screen.getByText("启用")).toBeInTheDocument();
     expect(screen.getByText("需修改密码")).toBeInTheDocument();
     expect(screen.getByText("PORTAL · 客户门户")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "最后登录" })).toBeVisible();
+    expect(screen.getByText("2026/07/22 11:04")).toBeVisible();
     expect(screen.queryByText("must-not-render")).not.toBeInTheDocument();
     expect(screen.queryByText("A only secret note")).not.toBeInTheDocument();
+  });
+
+  it("shows never logged in for customers and a dash for developer accounts", () => {
+    const base = {
+      isActive: true,
+      mustChangePassword: false,
+      createdAt: now,
+      updatedAt: now,
+      lastLoginAt: null,
+      projectIds: [],
+    };
+    render(
+      <UserManager
+        actorId={8}
+        projects={[]}
+        users={[
+          {
+            ...base,
+            id: 8,
+            username: "developer",
+            displayName: "李开发",
+            role: "DEVELOPER",
+          },
+          {
+            ...base,
+            id: 9,
+            username: "customer",
+            displayName: "王客户",
+            role: "CUSTOMER",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("从未登录")).toBeVisible();
+    expect(screen.getByText("—")).toBeVisible();
   });
 });

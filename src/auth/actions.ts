@@ -134,8 +134,41 @@ export async function loginAction(
     return actionFailure("INVALID_CREDENTIALS", GENERIC_LOGIN_ERROR);
   }
 
+  const session = database.sqlite
+    .transaction(() => {
+      const current = database.db
+        .select({
+          id: users.id,
+          role: users.role,
+          isActive: users.isActive,
+          passwordHash: users.passwordHash,
+        })
+        .from(users)
+        .where(eq(users.id, user.id))
+        .get();
+      if (
+        !current ||
+        !current.isActive ||
+        current.role !== user.role ||
+        current.passwordHash !== user.passwordHash
+      ) {
+        return null;
+      }
+      const created = createSession(database, current.id, resolved.now);
+      if (current.role === "CUSTOMER") {
+        database.db
+          .update(users)
+          .set({ lastLoginAt: resolved.now })
+          .where(eq(users.id, current.id))
+          .run();
+      }
+      return created;
+    })
+    .immediate();
+  if (!session) {
+    return actionFailure("INVALID_CREDENTIALS", GENERIC_LOGIN_ERROR);
+  }
   clearLoginFailures(database, username, resolved.source);
-  const session = createSession(database, user.id, resolved.now);
   setSessionCookie(
     resolved.cookies,
     session.token,

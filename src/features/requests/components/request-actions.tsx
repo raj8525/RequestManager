@@ -8,6 +8,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { buttonClassName } from "@/components/ui/button";
 import type { UserRole } from "@/db/types";
 import { CompleteRequestDialog } from "@/features/completion-notes/components/complete-request-dialog";
+import { ReopenRequestDialog } from "@/features/requests/components/reopen-request-dialog";
 import type { RequestViewDto } from "@/features/requests/presenter";
 import {
   archiveRequestRuntimeAction,
@@ -32,6 +33,7 @@ export function RequestActions({
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<ConfirmedAction>(null);
   const [completionOpen, setCompletionOpen] = useState(false);
+  const [reopenOpen, setReopenOpen] = useState(false);
   const canEdit =
     actor.role === "CUSTOMER" &&
     actor.id === request.createdById &&
@@ -50,6 +52,12 @@ export function RequestActions({
     actor.id === request.createdById &&
     request.recordStatus === "ACTIVE" &&
     request.progressStatus === "SCHEDULED" &&
+    request.project.isActive;
+  const canReopen =
+    actor.role === "CUSTOMER" &&
+    actor.id === request.createdById &&
+    request.recordStatus === "ACTIVE" &&
+    request.progressStatus === "COMPLETED" &&
     request.project.isActive;
 
   async function run(
@@ -80,7 +88,7 @@ export function RequestActions({
   const paused = request.recordStatus === "PAUSED";
   const archived = request.recordStatus === "ARCHIVED";
 
-  if (!isDeveloper && !showEdit && !canCustomerPause) return null;
+  if (!isDeveloper && !showEdit && !canCustomerPause && !canReopen) return null;
 
   return (
     <div className={compact ? "request-actions request-actions--compact" : "request-actions"}>
@@ -138,6 +146,17 @@ export function RequestActions({
             <option value="COMPLETED">完成</option>
           </select>
         </label>
+      ) : null}
+      {canReopen ? (
+        <button
+          type="button"
+          className={buttonClassName({ variant: "secondary", size: "small" })}
+          disabled={pending}
+          onClick={() => setReopenOpen(true)}
+        >
+          <RotateCcw aria-hidden="true" size={15} />
+          重新打开
+        </button>
       ) : null}
       {(canCustomerPause ||
         (isDeveloper && active && request.progressStatus === "SCHEDULED")) ? (
@@ -211,6 +230,15 @@ export function RequestActions({
           expectedVersion={request.version}
           onCancel={() => setCompletionOpen(false)}
           onCompleted={() => window.location.reload()}
+        />
+      ) : null}
+      {reopenOpen ? (
+        <ReopenRequestDialog
+          open
+          requestId={request.id}
+          expectedVersion={request.version}
+          onCancel={() => setReopenOpen(false)}
+          onReopened={() => window.location.reload()}
         />
       ) : null}
     </div>

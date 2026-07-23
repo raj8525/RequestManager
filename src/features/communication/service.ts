@@ -265,6 +265,7 @@ function presentClarificationMessage(
     requestId: message.requestId,
     author: { id: actor.id, displayName: actor.displayName },
     authorRole: message.authorRole,
+    messageKind: message.messageKind,
     content: message.content,
     createdAt: message.createdAt,
   };

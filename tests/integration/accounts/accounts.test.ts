@@ -245,6 +245,12 @@ describe("developer-managed accounts", () => {
     const db = database();
     const developer = await insertUser(db, { username: "dev", role: "DEVELOPER" });
     const customer = await insertUser(db, { username: "alice", role: "CUSTOMER" });
+    const lastLoginAt = new Date("2026-07-22T03:04:00.000Z");
+    db.db
+      .update(users)
+      .set({ lastLoginAt })
+      .where(eq(users.id, customer.id))
+      .run();
     const project = db.db
       .insert(projects)
       .values({ code: "ONE", name: "One", createdAt: NOW, updatedAt: NOW })
@@ -263,6 +269,7 @@ describe("developer-managed accounts", () => {
         expect.objectContaining({
           id: customer.id,
           username: "alice",
+          lastLoginAt,
           projectIds: [project.id],
         }),
       ]),

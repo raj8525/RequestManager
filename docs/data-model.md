@@ -4,7 +4,7 @@
 
 | 表 | 关键字段 | 关键约束 |
 | --- | --- | --- |
-| `users` | 用户名、显示名、密码哈希、角色、启用、强制改密 | 用户名大小写不敏感唯一；角色仅客户/开发者 |
+| `users` | 用户名、显示名、密码哈希、角色、启用、强制改密、客户最后成功登录时间 | 用户名大小写不敏感唯一；角色仅客户/开发者；最后登录可空 |
 | `sessions` | 令牌摘要、用户、过期和使用时间 | 令牌摘要唯一；用户停用或改密后撤销 |
 | `auth_throttle` | 规范用户名、来源摘要、窗口和计数 | 复合主键；计数非负；过期清理和总行数上界 |
 | `projects` | 编号、名称、说明、启用 | 项目编号大小写不敏感唯一 |
@@ -13,7 +13,7 @@
 | `attachments` | 需求、上传人、随机存储名、原名、MIME、大小、SHA-256 | 存储名唯一；大小非负 |
 | `public_remarks` | 需求、作者、正文、幂等键 | 作者加幂等键唯一；追加写入 |
 | `private_notes` | 需求、开发者、正文 | 每位开发者在每条需求最多一份 |
-| `clarification_messages` | 需求、作者、作者角色、正文、幂等键 | 作者加幂等键唯一；消息不可编辑或删除 |
+| `clarification_messages` | 需求、作者、作者角色、消息类型、正文、幂等键、载荷指纹 | 作者加幂等键唯一；消息类型为普通沟通或重新打开原因；消息不可编辑或删除 |
 | `request_events` | 需求、操作者、类型、可见性、结构化载荷 | 事件类型和可见性检查；私人笔记正文不写入 |
 | `developer_questions` | 项目、开发者、正文、提醒状态、版本 | 创建者加幂等键唯一；三态检查 |
 | `developer_question_messages` | 提问、作者、角色、正文 | 作者加幂等键唯一；追加写入 |
@@ -30,6 +30,7 @@ Drizzle 使用内部表 `__drizzle_migrations` 记录有序迁移哈希和创建
 - `requests.progress_status`：`UNSCHEDULED`、`SCHEDULED`、`COMPLETED`
 - `requests.record_status`：`ACTIVE`、`PAUSED`、`ARCHIVED`
 - `request_events.visibility`：`PUBLIC`、`DEVELOPER`
+- `clarification_messages.message_kind`：`CONVERSATION`、`REOPEN_REASON`
 - `developer_questions.attention_status`：`WAITING_CUSTOMER`、`WAITING_DEVELOPER`、`SEEN`
 
 ## 删除与保留
