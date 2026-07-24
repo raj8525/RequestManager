@@ -8,7 +8,10 @@ import { actionFailure, actionSuccess, type ActionResult } from "@/lib/action-re
 
 import type { ManagedUser } from "./service";
 
-export type ManageableUser = ManagedUser & { lastLoginAt: Date | null };
+export type ManageableUser = ManagedUser & {
+  lastLoginAt: Date | null;
+  lastActiveAt: Date | null;
+};
 export type ManageableUserDto = ManageableUser & { projectIds: number[] };
 
 export function listManageableUsers(
@@ -35,6 +38,7 @@ export function listManageableUsers(
         isActive: users.isActive,
         mustChangePassword: users.mustChangePassword,
         lastLoginAt: users.lastLoginAt,
+        lastActiveAt: users.lastActiveAt,
         createdAt: users.createdAt,
         updatedAt: users.updatedAt,
       })

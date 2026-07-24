@@ -26,8 +26,8 @@ test("shows only role-appropriate navigation and logs out", async ({ page }) => 
   await expect(page.getByRole("link", { name: "新建需求" })).toHaveCount(0);
   await page.goto("/manage/users");
   const customerRow = page.getByRole("row", { name: /Customer A.*customer-a/ });
-  await expect(customerRow.locator('[data-label="最后登录"]')).not.toHaveText(
-    "从未登录",
+  await expect(customerRow.locator('[data-label="最近活跃"]')).not.toHaveText(
+    "从未活跃",
   );
 });
 

@@ -18,6 +18,7 @@ import {
   createSession,
   getSessionUser,
   hashSessionToken,
+  recordCustomerActivity,
   revokeUserSessions,
 } from "@/auth/session-service";
 import {
@@ -161,6 +162,7 @@ export async function loginAction(
           .set({ lastLoginAt: resolved.now })
           .where(eq(users.id, current.id))
           .run();
+        recordCustomerActivity(database, current.id, resolved.now);
       }
       return created;
     })

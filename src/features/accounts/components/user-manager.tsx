@@ -38,7 +38,7 @@ function editorTitle(editor: Exclude<Editor, null>): string {
   return `重置密码 · ${editor.user.displayName}`;
 }
 
-function displayLastLogin(value: Date): string {
+function displayActivityTime(value: Date): string {
   return new Intl.DateTimeFormat("zh-CN", {
     year: "numeric",
     month: "2-digit",
@@ -119,7 +119,7 @@ export function UserManager({
                 <th scope="col">类型</th>
                 <th scope="col">状态</th>
                 <th scope="col">密码</th>
-                <th scope="col">最后登录</th>
+                <th scope="col">最近活跃</th>
                 <th scope="col">项目权限</th>
                 <th scope="col">操作</th>
               </tr>
@@ -150,16 +150,16 @@ export function UserManager({
                         {user.mustChangePassword ? "需修改密码" : "密码已更新"}
                       </Badge>
                     </td>
-                    <td data-label="最后登录">
+                    <td data-label="最近活跃">
                       {user.role === "DEVELOPER"
                         ? "—"
-                        : user.lastLoginAt
+                        : user.lastActiveAt
                           ? (
-                              <time dateTime={new Date(user.lastLoginAt).toISOString()}>
-                                {displayLastLogin(user.lastLoginAt)}
+                              <time dateTime={new Date(user.lastActiveAt).toISOString()}>
+                                {displayActivityTime(user.lastActiveAt)}
                               </time>
                             )
-                          : "从未登录"}
+                          : "从未活跃"}
                     </td>
                     <td data-label="项目权限" className="management-table__memberships">
                       {user.role === "DEVELOPER" ? (

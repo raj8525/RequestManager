@@ -155,6 +155,39 @@ describe("database-backed sessions", () => {
     });
   });
 
+  it("records customer activity at most once every ten minutes", async () => {
+    const db = database();
+    const customer = await insertUser(db);
+    const developer = await insertUser(db, {
+      username: "developer",
+      role: "DEVELOPER",
+    });
+    const customerSession = createSession(db, customer.id, NOW);
+    const developerSession = createSession(db, developer.id, NOW);
+    const withinWindow = new Date(NOW.getTime() + 9 * 60_000);
+    const nextWindow = new Date(NOW.getTime() + 10 * 60_000);
+
+    expect(getSessionUser(db, customerSession.token, NOW)?.id).toBe(customer.id);
+    expect(
+      db.db.select().from(users).where(eq(users.id, customer.id)).get()?.lastActiveAt,
+    ).toEqual(NOW);
+
+    expect(getSessionUser(db, customerSession.token, withinWindow)?.id).toBe(customer.id);
+    expect(
+      db.db.select().from(users).where(eq(users.id, customer.id)).get()?.lastActiveAt,
+    ).toEqual(NOW);
+
+    expect(getSessionUser(db, customerSession.token, nextWindow)?.id).toBe(customer.id);
+    expect(
+      db.db.select().from(users).where(eq(users.id, customer.id)).get()?.lastActiveAt,
+    ).toEqual(nextWindow);
+
+    expect(getSessionUser(db, developerSession.token, nextWindow)?.id).toBe(developer.id);
+    expect(
+      db.db.select().from(users).where(eq(users.id, developer.id)).get()?.lastActiveAt,
+    ).toBeNull();
+  });
+
   it("rejects a session immediately after the user is disabled", async () => {
     const db = database();
     const user = await insertUser(db);
@@ -446,6 +479,9 @@ describe("database-backed sessions", () => {
     expect(result).toMatchObject({ ok: true });
     expect(
       db.db.select().from(users).where(eq(users.id, user.id)).get()?.lastLoginAt,
+    ).toEqual(NOW);
+    expect(
+      db.db.select().from(users).where(eq(users.id, user.id)).get()?.lastActiveAt,
     ).toEqual(NOW);
     expect(cookies.writes[0]).toMatchObject({
       name: "request_manager_session",

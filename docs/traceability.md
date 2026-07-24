@@ -32,4 +32,4 @@
 | `UX-02` | 搜索、筛选、可点击表头、业务顺序、稳定分页 | `request-toolbar.tsx`、`request-list.tsx`、`queries.ts`、`pagination.tsx` | `tests/unit/requests/sorting.test.ts`、`tests/components/request-list.test.tsx`、`e2e/request-lifecycle.spec.ts` |
 | `SEC-01` | 服务端权限、同源、IDOR 防护 | `src/auth`、各领域服务和 API | `tests/unit/lib/csrf.test.ts`、`e2e/access-control.spec.ts` |
 
-基础批准规格：`docs/superpowers/specs/2026-07-10-request-manager-design.md`。需求标题增量规格：`docs/superpowers/specs/2026-07-14-request-titles-design.md`。客户重新打开与最后登录规格：`docs/superpowers/specs/2026-07-22-customer-reopen-completed-request-design.md`、`docs/superpowers/specs/2026-07-23-customer-last-login-design.md`。实施步骤和门禁见对应的 `docs/superpowers/plans/` 文档。
+基础批准规格：`docs/superpowers/specs/2026-07-10-request-manager-design.md`。需求标题增量规格：`docs/superpowers/specs/2026-07-14-request-titles-design.md`。客户重新打开、最后登录与最近活跃规格：`docs/superpowers/specs/2026-07-22-customer-reopen-completed-request-design.md`、`docs/superpowers/specs/2026-07-23-customer-last-login-design.md`、`docs/superpowers/specs/2026-07-24-customer-last-active-design.md`。实施步骤和门禁见对应的 `docs/superpowers/plans/` 文档。

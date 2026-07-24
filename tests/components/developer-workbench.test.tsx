@@ -86,6 +86,7 @@ describe("developer administration workbench", () => {
       createdAt: now,
       updatedAt: now,
       lastLoginAt: new Date("2026-07-22T03:04:00.000Z"),
+      lastActiveAt: new Date("2026-07-22T04:05:00.000Z"),
       projectIds: [11],
       passwordHash: "must-not-render",
       privateNote: "A only secret note",
@@ -106,8 +107,8 @@ describe("developer administration workbench", () => {
     expect(screen.getByText("启用")).toBeInTheDocument();
     expect(screen.getByText("需修改密码")).toBeInTheDocument();
     expect(screen.getByText("PORTAL · 客户门户")).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "最后登录" })).toBeVisible();
-    expect(screen.getByText("2026/07/22 11:04")).toBeVisible();
+    expect(screen.getByRole("columnheader", { name: "最近活跃" })).toBeVisible();
+    expect(screen.getByText("2026/07/22 12:05")).toBeVisible();
     expect(screen.queryByText("must-not-render")).not.toBeInTheDocument();
     expect(screen.queryByText("A only secret note")).not.toBeInTheDocument();
   });
@@ -119,6 +120,7 @@ describe("developer administration workbench", () => {
       createdAt: now,
       updatedAt: now,
       lastLoginAt: null,
+      lastActiveAt: null,
       projectIds: [],
     };
     render(
@@ -144,7 +146,7 @@ describe("developer administration workbench", () => {
       />,
     );
 
-    expect(screen.getByText("从未登录")).toBeVisible();
+    expect(screen.getByText("从未活跃")).toBeVisible();
     expect(screen.getByText("—")).toBeVisible();
   });
 });

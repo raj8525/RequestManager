@@ -246,9 +246,10 @@ describe("developer-managed accounts", () => {
     const developer = await insertUser(db, { username: "dev", role: "DEVELOPER" });
     const customer = await insertUser(db, { username: "alice", role: "CUSTOMER" });
     const lastLoginAt = new Date("2026-07-22T03:04:00.000Z");
+    const lastActiveAt = new Date("2026-07-22T04:05:00.000Z");
     db.db
       .update(users)
-      .set({ lastLoginAt })
+      .set({ lastLoginAt, lastActiveAt })
       .where(eq(users.id, customer.id))
       .run();
     const project = db.db
@@ -270,6 +271,7 @@ describe("developer-managed accounts", () => {
           id: customer.id,
           username: "alice",
           lastLoginAt,
+          lastActiveAt,
           projectIds: [project.id],
         }),
       ]),

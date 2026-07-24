@@ -64,6 +64,7 @@ export const users = sqliteTable(
       .notNull()
       .default(true),
     lastLoginAt: integer("last_login_at", { mode: "timestamp_ms" }),
+    lastActiveAt: integer("last_active_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
       .default(nowInMilliseconds),

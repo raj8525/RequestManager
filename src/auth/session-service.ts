@@ -1,11 +1,12 @@
 import { createHash, randomBytes } from "node:crypto";
 
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, isNull, lte, or } from "drizzle-orm";
 
 import { sessions, users } from "@/db/schema";
 import type { AppDatabase, UserRole } from "@/db/types";
 
 const SESSION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1_000;
+export const CUSTOMER_ACTIVITY_INTERVAL_MS = 10 * 60 * 1_000;
 
 export type AuthenticatedUser = {
   id: number;
@@ -17,6 +18,25 @@ export type AuthenticatedUser = {
 
 export function hashSessionToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
+}
+
+export function recordCustomerActivity(
+  database: AppDatabase,
+  userId: number,
+  now = new Date(),
+): void {
+  const cutoff = new Date(now.getTime() - CUSTOMER_ACTIVITY_INTERVAL_MS);
+  database.db
+    .update(users)
+    .set({ lastActiveAt: now })
+    .where(
+      and(
+        eq(users.id, userId),
+        eq(users.role, "CUSTOMER"),
+        or(isNull(users.lastActiveAt), lte(users.lastActiveAt, cutoff)),
+      ),
+    )
+    .run();
 }
 
 export function createSession(
@@ -56,6 +76,7 @@ export function getSessionUser(
       displayName: users.displayName,
       role: users.role,
       mustChangePassword: users.mustChangePassword,
+      lastActiveAt: users.lastActiveAt,
     })
     .from(sessions)
     .innerJoin(users, eq(sessions.userId, users.id))
@@ -74,6 +95,13 @@ export function getSessionUser(
     .set({ lastUsedAt: now })
     .where(eq(sessions.id, row.sessionId))
     .run();
+  if (
+    row.role === "CUSTOMER" &&
+    (!row.lastActiveAt ||
+      now.getTime() - row.lastActiveAt.getTime() >= CUSTOMER_ACTIVITY_INTERVAL_MS)
+  ) {
+    recordCustomerActivity(database, row.id, now);
+  }
 
   return {
     id: row.id,

@@ -202,7 +202,7 @@ describe("consistent backup and stopped restore", () => {
     expect(existsSync(`${result.backupPath}.partial`)).toBe(false);
     expect(result.manifest).toMatchObject({
       formatVersion: 2,
-      schemaVersion: 7,
+      schemaVersion: 8,
       migrationJournal: [
         { ordinal: 0, hash: expect.stringMatching(/^[0-9a-f]{64}$/) },
         { ordinal: 1, hash: expect.stringMatching(/^[0-9a-f]{64}$/) },
@@ -211,6 +211,7 @@ describe("consistent backup and stopped restore", () => {
         { ordinal: 4, hash: expect.stringMatching(/^[0-9a-f]{64}$/) },
         { ordinal: 5, hash: expect.stringMatching(/^[0-9a-f]{64}$/) },
         { ordinal: 6, hash: expect.stringMatching(/^[0-9a-f]{64}$/) },
+        { ordinal: 7, hash: expect.stringMatching(/^[0-9a-f]{64}$/) },
       ],
       database: { path: "database.sqlite" },
       attachments: expect.arrayContaining([

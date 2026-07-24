@@ -81,7 +81,7 @@ describe("explicit migration and first-developer bootstrap", () => {
     expect(log).toMatchObject({
       event: "database_migrated",
       beforeVersion: 0,
-      afterVersion: 7,
+      afterVersion: 8,
     });
 
     const sqlite = new Database(paths.databasePath, { readonly: true });
@@ -93,6 +93,7 @@ describe("explicit migration and first-developer bootstrap", () => {
         .prepare("pragma table_info('clarification_messages')")
         .all() as Array<{ name: string; dflt_value: string | null }>;
       expect(userColumns.some((column) => column.name === "last_login_at")).toBe(true);
+      expect(userColumns.some((column) => column.name === "last_active_at")).toBe(true);
       expect(
         clarificationColumns.find((column) => column.name === "message_kind"),
       ).toMatchObject({ dflt_value: "'CONVERSATION'" });

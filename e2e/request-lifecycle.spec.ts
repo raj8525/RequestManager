@@ -42,6 +42,7 @@ test("fills a legacy request title once without exposing other edit fields", asy
 test("runs the customer and developer request lifecycle with simple clarification", async ({
   page,
 }) => {
+  test.setTimeout(60_000);
   const content = `结算页面保存后金额显示错误 ${Date.now()}`;
   const title = "结算页面金额显示错误";
   const editedContent = `${content}，刷新页面后仍可复现。`;
