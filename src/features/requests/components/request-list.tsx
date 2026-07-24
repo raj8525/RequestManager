@@ -34,6 +34,7 @@ const recordLabels = {
 
 function formatUpdatedAt(value: Date): string {
   return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",

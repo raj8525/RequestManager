@@ -65,6 +65,23 @@ describe("RequestList", () => {
     expect(within(row).getByRole("link", { name: "保存按钮没有响应" })).toBeVisible();
   });
 
+  it("shows update times in China time when rendered on a UTC server", () => {
+    const originalTimeZone = process.env.TZ;
+    process.env.TZ = "UTC";
+    try {
+      render(
+        <RequestList
+          role="CUSTOMER"
+          items={[requestDto({ updatedAt: new Date("2026-07-24T08:30:00.000Z") })]}
+        />,
+      );
+
+      expect(screen.getByText("07/24 16:30")).toBeVisible();
+    } finally {
+      process.env.TZ = originalTimeZone;
+    }
+  });
+
   it("uses gray, blue, and green progress badges", () => {
     render(
       <RequestList
