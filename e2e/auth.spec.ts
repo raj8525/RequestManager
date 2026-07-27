@@ -31,6 +31,15 @@ test("shows only role-appropriate navigation and logs out", async ({ page }) => 
   );
 });
 
+test("applies request select filters immediately", async ({ page }) => {
+  await loginAs(page, "developerA");
+
+  await page.getByLabel("按进度筛选").selectOption("COMPLETED");
+
+  await expect(page).toHaveURL(/progressStatus=COMPLETED/);
+  await expect(page.getByLabel("按进度筛选")).toHaveValue("COMPLETED");
+});
+
 test("forces a newly created account to change its password while allowing logout", async ({
   page,
 }) => {

@@ -1,5 +1,8 @@
+"use client";
+
 import { RotateCcw, Search } from "lucide-react";
 import Link from "next/link";
+import type { ChangeEvent } from "react";
 
 import { buttonClassName } from "@/components/ui/button";
 import type { RequestProjectOption } from "@/features/requests/components/request-form";
@@ -14,6 +17,10 @@ export type RequestFilterValues = {
   sort?: string;
   direction?: string;
 };
+
+function submitFilters(event: ChangeEvent<HTMLSelectElement>): void {
+  event.currentTarget.form?.requestSubmit();
+}
 
 export function RequestToolbar({
   projects,
@@ -39,7 +46,12 @@ export function RequestToolbar({
       </label>
       <label>
         <span className="sr-only">项目</span>
-        <select name="projectId" aria-label="按项目筛选" defaultValue={values.projectId ?? ""}>
+        <select
+          name="projectId"
+          aria-label="按项目筛选"
+          defaultValue={values.projectId ?? ""}
+          onChange={submitFilters}
+        >
           <option value="">全部项目</option>
           {projects.map((project) => (
             <option value={project.id} key={project.id}>{project.code} · {project.name}</option>
@@ -48,7 +60,12 @@ export function RequestToolbar({
       </label>
       <label>
         <span className="sr-only">类型</span>
-        <select name="requestType" aria-label="按类型筛选" defaultValue={values.requestType ?? ""}>
+        <select
+          name="requestType"
+          aria-label="按类型筛选"
+          defaultValue={values.requestType ?? ""}
+          onChange={submitFilters}
+        >
           <option value="">全部类型</option>
           <option value="BUG">Bug</option>
           <option value="CHANGE">功能变更</option>
@@ -57,7 +74,12 @@ export function RequestToolbar({
       </label>
       <label>
         <span className="sr-only">优先级</span>
-        <select name="priority" aria-label="按优先级筛选" defaultValue={values.priority ?? ""}>
+        <select
+          name="priority"
+          aria-label="按优先级筛选"
+          defaultValue={values.priority ?? ""}
+          onChange={submitFilters}
+        >
           <option value="">全部优先级</option>
           <option value="URGENT">加急</option>
           <option value="IMPORTANT">重要</option>
@@ -66,7 +88,12 @@ export function RequestToolbar({
       </label>
       <label>
         <span className="sr-only">进度</span>
-        <select name="progressStatus" aria-label="按进度筛选" defaultValue={values.progressStatus ?? ""}>
+        <select
+          name="progressStatus"
+          aria-label="按进度筛选"
+          defaultValue={values.progressStatus ?? ""}
+          onChange={submitFilters}
+        >
           <option value="">全部进度</option>
           <option value="UNSCHEDULED">未排期</option>
           <option value="SCHEDULED">已排期</option>
@@ -75,7 +102,12 @@ export function RequestToolbar({
       </label>
       <label>
         <span className="sr-only">记录状态</span>
-        <select name="recordStatus" aria-label="按记录状态筛选" defaultValue={values.recordStatus ?? ""}>
+        <select
+          name="recordStatus"
+          aria-label="按记录状态筛选"
+          defaultValue={values.recordStatus ?? ""}
+          onChange={submitFilters}
+        >
           <option value="">默认（不含归档）</option>
           <option value="ACTIVE">正常</option>
           <option value="PAUSED">已暂停</option>
