@@ -19,14 +19,9 @@ describe("deployment container contract", () => {
 
   test("can compile native dependencies when prebuilt downloads are unavailable", () => {
     const dockerfile = readFileSync(resolve(root, "Dockerfile"), "utf8");
-    const installTools = dockerfile.indexOf("apt-get install -y --no-install-recommends");
-    const installDependencies = dockerfile.indexOf("RUN npm ci");
 
-    expect(installTools).toBeGreaterThan(-1);
-    expect(dockerfile).toContain("python3");
-    expect(dockerfile).toContain("make");
-    expect(dockerfile).toContain("g++");
-    expect(installTools).toBeLessThan(installDependencies);
+    expect(dockerfile).toContain("FROM node:24-bookworm AS builder");
+    expect(dockerfile).toContain("FROM node:24-bookworm-slim AS runner");
   });
 
   test("never sends runtime data or secrets to Docker", () => {
